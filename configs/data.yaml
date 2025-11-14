@@ -1,0 +1,71 @@
+# defining input data
+genetic_data:
+    somatic_mut:
+        filename: "somatic_mut.csv"
+    somatic_amp:
+        filename: "somatic_amp.csv"
+    somatic_del:
+        filename: "somatic_del.csv"
+    germline_rare_lof: 
+        filename: "germline_rare_lof.csv"
+    germline_rare_missense: 
+        filename: "germline_rare_missense.csv"
+    # germline_common_lof: 
+    #     filename: "germline_common_lof.csv" # removed: zero variants in this category
+    germline_common_missense:  # removed downstream: identical to germline_common_lof_missense
+        filename: "germline_common_missense.csv"
+    # all LOF
+    germline_rare_common_lof:
+        filename: "germline_rare_common_lof.csv"
+    # all missense
+    germline_rare_common_missense:
+        filename: "germline_rare_common_missense.csv"
+    # all rare
+    germline_rare_lof_missense: 
+        filename: "germline_rare_lof_missense.csv"
+    # all common
+    germline_common_lof_missense: 
+        filename: "germline_common_lof_missense.csv"
+    # all (rare and common, LOF and missense)
+    germline_rare_common_lof_missense: 
+        filename: "germline_rare_common_lof_missense.csv"
+confounder_data:
+    filename: "additional.csv"
+target:
+    filename: "y.csv"
+
+# # defining input data
+# genetic_data:
+#     somatic_mut:
+#         filename: "somatic_mut.csv"
+#     somatic_amp:
+#         filename: "somatic_amp.csv"
+#     somatic_del:
+#         filename: "somatic_del.csv"
+#     germline_rare_lof: 
+#         filename: "germline_rare_high-impact.csv"
+#     germline_rare_missense: 
+#         filename: "germline_rare_moderate-impact.csv"
+#     germline_common_lof: 
+#         filename: "germline_common_high-impact.csv"
+#     germline_common_missense: 
+#         filename: "germline_common_moderate-impact.csv"
+#     # all LOF
+#     germline_rare_common_lof:
+#         filename: "germline_rare_common_high-impact.csv"
+#     # all missense
+#     germline_rare_common_missense:
+#         filename: "germline_rare_common_moderate-impact.csv"
+#     # all rare
+#     germline_rare_lof_missense: 
+#         filename: "germline_rare_high-impact_moderate-impact.csv"
+#     # all common
+#     germline_common_lof_missense: 
+#         filename: "germline_common_high-impact_moderate-impact.csv"
+#     # all (rare and common, LOF and missense)
+#     germline_rare_common_lof_missense: 
+#         filename: "germline_rare_common_high-impact_moderate-impact.csv"
+# confounder_data:
+#     filename: "additional.csv"
+# target:
+#     filename: "y.csv"

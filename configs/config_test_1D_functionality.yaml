@@ -1,0 +1,41 @@
+method: grid
+parameters:
+  cpus:
+    value: 2
+  data_config_f:
+    value: /mnt/disks/gmiller_data1/pnet-simu-private/configs/data.yaml
+  datasets:
+    value: somatic_mut
+  evaluation_set:
+    values:
+    - validation
+  epochs:
+    value: 3
+  input_data_dir:
+    value: /mnt/disks/gmiller_data1/pnet_germline/processed/wandb-group-data_prep_germline_tier12_and_somatic/converted-IDs-to-somatic_imputed-germline_True_imputed-somatic_False_paired-samples-True/wandb-run-id-u5yt90p1
+  input_data_wandb_id:
+    value: u5yt90p1
+  model_type:
+    values:
+    - pnet
+    - rf
+  perturbation_suffix:
+    values:
+    - gene-AR_OR-10_ctrlFreq-0p5_caseFreq-0p9091_nFeatures-10
+  perturbed_data_config_f:
+    value: /mnt/disks/gmiller_data1/pnet-simu-private/configs/perturbed_data-somatic_mut-or_x_control_freqs.yaml
+  perturbed_data_dir:
+    value: /mnt/disks/gmiller_data1/pnet_germline/processed/perturbed_genotype_datasets/p1000_somatic_mut/wandb-run-id-hvu4lf2q
+  perturbed_data_wandb_id:
+    value: hvu4lf2q
+  seed:
+    values:
+    - 123
+  wandb_group:
+    value: test_to_delete
+  wandb_project:
+    value: prostate_met_status
+program: /mnt/disks/gmiller_data1/pnet-simu-private/src/pnet/run_model_on_perturbed_data.py
+
+# python /mnt/disks/gmiller_data1/pnet-simu-private/src/pnet/run_model_on_preharmonized_data.py --cpus=2 --data_config_f=/mnt/disks/gmiller_data1/pnet-simu-private/configs/data.yaml --datasets="somatic_amp somatic_del somatic_mut" --evaluation_set=validation --input_data_dir=/mnt/disks/gmiller_data1/pnet_germline/processed/wandb-group-data_prep_germline_tier12_and_somatic/converted-IDs-to-somatic_imputed-germline_True_imputed-somatic_False_paired-samples-True/wandb-run-id-u5yt90p1 --input_data_wandb_id=u5yt90p1 --min_samples_split=50 --model_type=rf --seed=356 --wandb_group=test_to_delete --wandb_project=prostate_met_status
+# python /mnt/disks/gmiller_data1/pnet-simu-private/src/pnet/run_model_on_preharmonized_data.py --cpus=2 --data_config_f=/mnt/disks/gmiller_data1/pnet-simu-private/configs/data.yaml --datasets="somatic_amp somatic_del somatic_mut" --evaluation_set=validation --input_data_dir=/mnt/disks/gmiller_data1/pnet_germline/processed/wandb-group-data_prep_germline_tier12_and_somatic/converted-IDs-to-somatic_imputed-germline_True_imputed-somatic_False_paired-samples-True/wandb-run-id-u5yt90p1 --input_data_wandb_id=u5yt90p1 --min_samples_split=50 --model_type=pnet --seed=356 --wandb_group=test_to_delete --wandb_project=prostate_met_status

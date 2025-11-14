@@ -1,0 +1,45 @@
+method: grid
+parameters:
+  cpus:
+    value: 2
+  data_config_f:
+    value: /mnt/disks/gmiller_data1/pnet/configs/data.yaml
+  datasets:
+    values:
+    - somatic_amp somatic_del somatic_mut
+    - germline_rare_lof
+    - germline_rare_common_missense
+    - germline_rare_lof_missense
+    - germline_common_lof_missense
+    - somatic_amp somatic_del somatic_mut germline_rare_lof
+    - germline_rare_common_lof_missense
+    - somatic_amp somatic_del somatic_mut germline_rare_common_lof_missense
+    - somatic_amp somatic_del somatic_mut germline_rare_lof_missense
+    - somatic_amp somatic_del somatic_mut germline_common_lof_missense
+    - somatic_amp somatic_del somatic_mut germline_rare_common_lof
+    - somatic_amp somatic_del somatic_mut germline_rare_common_missense
+  evaluation_set:
+    values:
+    - validation
+  input_data_dir:
+    value: /mnt/disks/gmiller_data1/pnet_germline/processed/wandb-group-data_prep_germline_tier12_and_somatic/converted-IDs-to-somatic_imputed-germline_True_imputed-somatic_False_paired-samples-True/wandb-run-id-u5yt90p1
+  input_data_wandb_id:
+    value: u5yt90p1
+  min_samples_split:
+    value: 50
+  model_type:
+    values:
+    - pnet
+    - rf
+  seed:
+    values:
+    - 123
+    - 42
+    - 155
+    - 23
+    - 356
+  wandb_group:
+    value: pnet_somatic_and_germline_exp_004
+  wandb_project:
+    value: prostate_met_status
+program: /mnt/disks/gmiller_data1/pnet/src/pnet/run_model_on_preharmonized_data.py

@@ -1,0 +1,49 @@
+perturbed_somatic_mut:
+  gene-AR_OR-10_ctrlFreq-0p001_caseFreq-0p01:
+    data_file: somatic_mut_gene-AR_OR-10_ctrlFreq-0p001_caseFreq-0p01.csv
+    target_file: y_gene-AR_OR-10_ctrlFreq-0p001_caseFreq-0p01.csv
+  gene-AR_OR-10_ctrlFreq-0p01_caseFreq-0p1:
+    data_file: somatic_mut_gene-AR_OR-10_ctrlFreq-0p01_caseFreq-0p1.csv
+    target_file: y_gene-AR_OR-10_ctrlFreq-0p01_caseFreq-0p1.csv
+  gene-AR_OR-10_ctrlFreq-0p05_caseFreq-0p5:
+    data_file: somatic_mut_gene-AR_OR-10_ctrlFreq-0p05_caseFreq-0p5.csv
+    target_file: y_gene-AR_OR-10_ctrlFreq-0p05_caseFreq-0p5.csv
+  gene-AR_OR-10_ctrlFreq-0p1_caseFreq-1p0:
+    data_file: somatic_mut_gene-AR_OR-10_ctrlFreq-0p1_caseFreq-1p0.csv
+    target_file: y_gene-AR_OR-10_ctrlFreq-0p1_caseFreq-1p0.csv
+  gene-AR_OR-1_ctrlFreq-0p001_caseFreq-0p001:
+    data_file: somatic_mut_gene-AR_OR-1_ctrlFreq-0p001_caseFreq-0p001.csv
+    target_file: y_gene-AR_OR-1_ctrlFreq-0p001_caseFreq-0p001.csv
+  gene-AR_OR-1_ctrlFreq-0p01_caseFreq-0p01:
+    data_file: somatic_mut_gene-AR_OR-1_ctrlFreq-0p01_caseFreq-0p01.csv
+    target_file: y_gene-AR_OR-1_ctrlFreq-0p01_caseFreq-0p01.csv
+  gene-AR_OR-1_ctrlFreq-0p05_caseFreq-0p05:
+    data_file: somatic_mut_gene-AR_OR-1_ctrlFreq-0p05_caseFreq-0p05.csv
+    target_file: y_gene-AR_OR-1_ctrlFreq-0p05_caseFreq-0p05.csv
+  gene-AR_OR-1_ctrlFreq-0p1_caseFreq-0p1:
+    data_file: somatic_mut_gene-AR_OR-1_ctrlFreq-0p1_caseFreq-0p1.csv
+    target_file: y_gene-AR_OR-1_ctrlFreq-0p1_caseFreq-0p1.csv
+  gene-AR_OR-1p1_ctrlFreq-0p001_caseFreq-0p0011:
+    data_file: somatic_mut_gene-AR_OR-1p1_ctrlFreq-0p001_caseFreq-0p0011.csv
+    target_file: y_gene-AR_OR-1p1_ctrlFreq-0p001_caseFreq-0p0011.csv
+  gene-AR_OR-1p1_ctrlFreq-0p01_caseFreq-0p011:
+    data_file: somatic_mut_gene-AR_OR-1p1_ctrlFreq-0p01_caseFreq-0p011.csv
+    target_file: y_gene-AR_OR-1p1_ctrlFreq-0p01_caseFreq-0p011.csv
+  gene-AR_OR-1p1_ctrlFreq-0p05_caseFreq-0p055:
+    data_file: somatic_mut_gene-AR_OR-1p1_ctrlFreq-0p05_caseFreq-0p055.csv
+    target_file: y_gene-AR_OR-1p1_ctrlFreq-0p05_caseFreq-0p055.csv
+  gene-AR_OR-1p1_ctrlFreq-0p1_caseFreq-0p11:
+    data_file: somatic_mut_gene-AR_OR-1p1_ctrlFreq-0p1_caseFreq-0p11.csv
+    target_file: y_gene-AR_OR-1p1_ctrlFreq-0p1_caseFreq-0p11.csv
+  gene-AR_OR-2_ctrlFreq-0p001_caseFreq-0p002:
+    data_file: somatic_mut_gene-AR_OR-2_ctrlFreq-0p001_caseFreq-0p002.csv
+    target_file: y_gene-AR_OR-2_ctrlFreq-0p001_caseFreq-0p002.csv
+  gene-AR_OR-2_ctrlFreq-0p01_caseFreq-0p02:
+    data_file: somatic_mut_gene-AR_OR-2_ctrlFreq-0p01_caseFreq-0p02.csv
+    target_file: y_gene-AR_OR-2_ctrlFreq-0p01_caseFreq-0p02.csv
+  gene-AR_OR-2_ctrlFreq-0p05_caseFreq-0p1:
+    data_file: somatic_mut_gene-AR_OR-2_ctrlFreq-0p05_caseFreq-0p1.csv
+    target_file: y_gene-AR_OR-2_ctrlFreq-0p05_caseFreq-0p1.csv
+  gene-AR_OR-2_ctrlFreq-0p1_caseFreq-0p2:
+    data_file: somatic_mut_gene-AR_OR-2_ctrlFreq-0p1_caseFreq-0p2.csv
+    target_file: y_gene-AR_OR-2_ctrlFreq-0p1_caseFreq-0p2.csv

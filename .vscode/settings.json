@@ -1,0 +1,4 @@
+{
+    "python.analysis.extraPaths": ["src"],
+    "python.defaultInterpreterPath": "/opt/conda/envs/pnet/bin/python", # conda activate your-env, which python
+  }

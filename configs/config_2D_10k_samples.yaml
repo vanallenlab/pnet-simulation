@@ -1,0 +1,40 @@
+method: grid
+parameters:
+  num_class0_samples:
+    values:
+    - 5000
+  num_class1_samples:
+    values:
+    - 5000
+  odds_ratio:
+    values:
+    - 10
+    - 2
+    - 1.1
+    - 1
+  sampling_strategy:
+    values:
+    - continuous
+    - binary
+  seed:
+    values:
+    - 42
+    - 123
+    - 155
+    - 23
+    - 66
+    - 76
+    - 34
+    - 56
+    - 1
+    - 7
+  sigma:
+    values:
+    - 0.8
+    - 0.5
+    - 0.1
+    - 0
+  wandb_group:
+    value: simulated_data_008
+program: run_model_on_pure_simulated_data.py
+project: prostate_met_status

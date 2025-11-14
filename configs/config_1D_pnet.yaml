@@ -1,0 +1,96 @@
+method: grid
+parameters:
+  cpus:
+    value: 2
+  data_config_f:
+    value: /mnt/disks/gmiller_data1/pnet/configs/data.yaml
+  datasets:
+    value: somatic_mut
+  evaluation_set:
+    values:
+    - validation
+  input_data_dir:
+    value: /mnt/disks/gmiller_data1/pnet_germline/processed/wandb-group-data_prep_germline_tier12_and_somatic/converted-IDs-to-somatic_imputed-germline_True_imputed-somatic_False_paired-samples-True/wandb-run-id-u5yt90p1
+  input_data_wandb_id:
+    value: u5yt90p1
+  model_type:
+    values:
+    - pnet
+  perturbation_suffix:
+    values:
+    - gene-AR_OR-1_ctrlFreq-0p001_caseFreq-0p001_nFeatures-10
+    - gene-AR_OR-1p1_ctrlFreq-0p001_caseFreq-0p0011_nFeatures-10
+    - gene-AR_OR-2_ctrlFreq-0p001_caseFreq-0p002_nFeatures-10
+    - gene-AR_OR-10_ctrlFreq-0p001_caseFreq-0p0099_nFeatures-10
+    - gene-AR_OR-30_ctrlFreq-0p001_caseFreq-0p0292_nFeatures-10
+    - gene-AR_OR-1_ctrlFreq-0p01_caseFreq-0p01_nFeatures-10
+    - gene-AR_OR-1p1_ctrlFreq-0p01_caseFreq-0p011_nFeatures-10
+    - gene-AR_OR-2_ctrlFreq-0p01_caseFreq-0p0198_nFeatures-10
+    - gene-AR_OR-10_ctrlFreq-0p01_caseFreq-0p0917_nFeatures-10
+    - gene-AR_OR-30_ctrlFreq-0p01_caseFreq-0p2326_nFeatures-10
+    - gene-AR_OR-1_ctrlFreq-0p05_caseFreq-0p05_nFeatures-10
+    - gene-AR_OR-1p1_ctrlFreq-0p05_caseFreq-0p0547_nFeatures-10
+    - gene-AR_OR-2_ctrlFreq-0p05_caseFreq-0p0952_nFeatures-10
+    - gene-AR_OR-10_ctrlFreq-0p05_caseFreq-0p3448_nFeatures-10
+    - gene-AR_OR-30_ctrlFreq-0p05_caseFreq-0p6122_nFeatures-10
+    - gene-AR_OR-1_ctrlFreq-0p1_caseFreq-0p1_nFeatures-10
+    - gene-AR_OR-1p1_ctrlFreq-0p1_caseFreq-0p1089_nFeatures-10
+    - gene-AR_OR-2_ctrlFreq-0p1_caseFreq-0p1818_nFeatures-10
+    - gene-AR_OR-10_ctrlFreq-0p1_caseFreq-0p5263_nFeatures-10
+    - gene-AR_OR-30_ctrlFreq-0p1_caseFreq-0p7692_nFeatures-10
+    - gene-AR_OR-1_ctrlFreq-0p2_caseFreq-0p2_nFeatures-10
+    - gene-AR_OR-1p1_ctrlFreq-0p2_caseFreq-0p2157_nFeatures-10
+    - gene-AR_OR-2_ctrlFreq-0p2_caseFreq-0p3333_nFeatures-10
+    - gene-AR_OR-10_ctrlFreq-0p2_caseFreq-0p7143_nFeatures-10
+    - gene-AR_OR-30_ctrlFreq-0p2_caseFreq-0p8824_nFeatures-10
+    - gene-AR_OR-1_ctrlFreq-0p5_caseFreq-0p5_nFeatures-10
+    - gene-AR_OR-1p1_ctrlFreq-0p5_caseFreq-0p5238_nFeatures-10
+    - gene-AR_OR-2_ctrlFreq-0p5_caseFreq-0p6667_nFeatures-10
+    - gene-AR_OR-10_ctrlFreq-0p5_caseFreq-0p9091_nFeatures-10
+    - gene-AR_OR-30_ctrlFreq-0p5_caseFreq-0p9677_nFeatures-10
+    - gene-AR_OR-1_ctrlFreq-0p001_caseFreq-0p001_nFeatures-100
+    - gene-AR_OR-1p1_ctrlFreq-0p001_caseFreq-0p0011_nFeatures-100
+    - gene-AR_OR-2_ctrlFreq-0p001_caseFreq-0p002_nFeatures-100
+    - gene-AR_OR-10_ctrlFreq-0p001_caseFreq-0p0099_nFeatures-100
+    - gene-AR_OR-30_ctrlFreq-0p001_caseFreq-0p0292_nFeatures-100
+    - gene-AR_OR-1_ctrlFreq-0p01_caseFreq-0p01_nFeatures-100
+    - gene-AR_OR-1p1_ctrlFreq-0p01_caseFreq-0p011_nFeatures-100
+    - gene-AR_OR-2_ctrlFreq-0p01_caseFreq-0p0198_nFeatures-100
+    - gene-AR_OR-10_ctrlFreq-0p01_caseFreq-0p0917_nFeatures-100
+    - gene-AR_OR-30_ctrlFreq-0p01_caseFreq-0p2326_nFeatures-100
+    - gene-AR_OR-1_ctrlFreq-0p05_caseFreq-0p05_nFeatures-100
+    - gene-AR_OR-1p1_ctrlFreq-0p05_caseFreq-0p0547_nFeatures-100
+    - gene-AR_OR-2_ctrlFreq-0p05_caseFreq-0p0952_nFeatures-100
+    - gene-AR_OR-10_ctrlFreq-0p05_caseFreq-0p3448_nFeatures-100
+    - gene-AR_OR-30_ctrlFreq-0p05_caseFreq-0p6122_nFeatures-100
+    - gene-AR_OR-1_ctrlFreq-0p1_caseFreq-0p1_nFeatures-100
+    - gene-AR_OR-1p1_ctrlFreq-0p1_caseFreq-0p1089_nFeatures-100
+    - gene-AR_OR-2_ctrlFreq-0p1_caseFreq-0p1818_nFeatures-100
+    - gene-AR_OR-10_ctrlFreq-0p1_caseFreq-0p5263_nFeatures-100
+    - gene-AR_OR-30_ctrlFreq-0p1_caseFreq-0p7692_nFeatures-100
+    - gene-AR_OR-1_ctrlFreq-0p2_caseFreq-0p2_nFeatures-100
+    - gene-AR_OR-1p1_ctrlFreq-0p2_caseFreq-0p2157_nFeatures-100
+    - gene-AR_OR-2_ctrlFreq-0p2_caseFreq-0p3333_nFeatures-100
+    - gene-AR_OR-10_ctrlFreq-0p2_caseFreq-0p7143_nFeatures-100
+    - gene-AR_OR-30_ctrlFreq-0p2_caseFreq-0p8824_nFeatures-100
+    - gene-AR_OR-1_ctrlFreq-0p5_caseFreq-0p5_nFeatures-100
+    - gene-AR_OR-1p1_ctrlFreq-0p5_caseFreq-0p5238_nFeatures-100
+    - gene-AR_OR-2_ctrlFreq-0p5_caseFreq-0p6667_nFeatures-100
+    - gene-AR_OR-10_ctrlFreq-0p5_caseFreq-0p9091_nFeatures-100
+    - gene-AR_OR-30_ctrlFreq-0p5_caseFreq-0p9677_nFeatures-100
+  perturbed_data_config_f:
+    value: /mnt/disks/gmiller_data1/pnet/configs/perturbed_data-somatic_mut-or_x_control_freqs.yaml
+  perturbed_data_dir:
+    value: /mnt/disks/gmiller_data1/pnet_germline/processed/perturbed_genotype_datasets/p1000_somatic_mut/wandb-run-id-hvu4lf2q
+  perturbed_data_wandb_id:
+    value: hvu4lf2q
+  seed:
+    values:
+    - 123
+    - 42
+    - 155
+  wandb_group:
+    value: single_gene_perturbation_002
+  wandb_project:
+    value: prostate_met_status
+program: /mnt/disks/gmiller_data1/pnet/src/pnet/run_model_on_perturbed_data.py
