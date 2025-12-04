@@ -1,5 +1,5 @@
 # Simulation and empirical evaluation of biologically-informed neural network performance
-This codebase contains all the code associated with the paper (in submission).
+This codebase contains all the code associated with the paper (in submission). Posted on bioRxiv at https://www.biorxiv.org/content/10.1101/2025.11.13.687845v1.
 This documentation is a work-in-progress and will continue to be updated.
 
 ## Installation and environment setup
