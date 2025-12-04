@@ -1,7 +1,6 @@
 """
 Additional filtering: germline-specific factors (e.g. MAF <0.01)
-
-Here we use the function that the germline folks use to filter down to a reasonable subset of variants (aka those likely to be high impact and biologically relevant, not just popping out due to population structure).
+Enable filter to a subset of variants likely to be high impact and biologically relevant.
 
 Modified from this notebook: https://app.terra.bio/#workspaces/vanallen-firecloud-nih/Germline_pipeline_components/analysis/launch/Jan2023_PathogenicVariantFilteringNotebook.ipynb
 """

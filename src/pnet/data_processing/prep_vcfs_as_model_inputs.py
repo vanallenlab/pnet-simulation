@@ -1,5 +1,4 @@
 # Script to prepare each data modality to be directly loaded into P-NET
-# Author: Gwen Miller <gwen_miller@g.harvard.edu>
 
 """
 Here, we prepare our inputs so they can be easily loaded into P-NET (and other models) without requiring any additional work beyond creating train/test/val splits.

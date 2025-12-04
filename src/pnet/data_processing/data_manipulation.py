@@ -1,8 +1,6 @@
 """
 Utility functions related to the processing and analysis of germline data.
 Specifically, working with germline VCFs for the prostate cancer dataset.
-
-Author: Gwen Miller <gwen_miller@g.harvard.edu>
 """
 
 import logging

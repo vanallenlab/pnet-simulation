@@ -2,7 +2,6 @@
 Functions for
 - reporting information during running of a program, eg details about DFs
 - reporting evaluation information for models
-Author: Gwen Miller <gwen_miller@g.harvard.edu>
 """
 
 import json
