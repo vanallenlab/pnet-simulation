@@ -1,6 +1,7 @@
 import argparse
 import logging
 import os
+import warnings
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -12,6 +13,9 @@ from sklearn.model_selection import train_test_split
 import wandb
 from pnet import Pnet, pnet_loader, report_and_eval, util
 from pnet.utils import modeling_utils
+
+warnings.simplefilter(action="ignore", category=FutureWarning)
+
 
 logging.basicConfig(
     encoding="utf-8",
@@ -42,13 +46,17 @@ def make_mu_vectors(num_genes, high_or_genes=10, OR=1.0, mu0_range=(0.001, 0.1))
         OR (float): Odds ratio to compute mu1 from mu0.
         mu0_range (tuple): Range from which to sample mu0 values.
     """
-    logger.info(f"Generating mu0 and mu1 vectors for {num_genes} genes with OR={OR}, high_or_genes={high_or_genes}.")
+    logger.info(
+        f"Generating mu0 and mu1 vectors for {num_genes} genes with OR={OR}, high_or_genes={high_or_genes}."
+    )
     logger.info(f"mu0 will be sampled uniformly from {mu0_range}.")
     mu0 = np.random.uniform(*mu0_range, size=num_genes)
     delta = np.zeros(num_genes)
     idx = np.random.choice(num_genes, high_or_genes, replace=False)
     delta[idx] = 1
-    logger.info(f"mu1 identical to mu0 except for the {high_or_genes} perturbed genes, where the OR defines mu1 value.")
+    logger.info(
+        f"mu1 identical to mu0 except for the {high_or_genes} perturbed genes, where the OR defines mu1 value."
+    )
     mu1 = compute_mu1_from_or(mu0, OR) * delta + mu0 * (1 - delta)
     return mu0, mu1, idx
 
@@ -119,7 +127,9 @@ def sample_continuous_genotypes(mu, Sigma, n_samples):
     Returns:
         np.ndarray: A matrix of shape (n_samples, len(mu)) containing the sampled genotypes.
     """
-    logger.info(f"Sampling continuous genotypes for {n_samples} samples from a multivariate normal distribution.")
+    logger.info(
+        f"Sampling continuous genotypes for {n_samples} samples from a multivariate normal distribution."
+    )
     return np.random.multivariate_normal(mean=mu, cov=Sigma, size=n_samples)
 
 
@@ -184,10 +194,16 @@ def get_module_genes_basic(num_genes, perturbed_genes, frac=0.5):
     num_to_keep = int(len(perturbed_genes) * frac)
     unperturbed_genes = np.setdiff1d(np.arange(num_genes), perturbed_genes)
 
-    perturbed_genes_to_keep = np.random.choice(perturbed_genes, num_to_keep, replace=False)
-    unperturbed_genes_to_keep = np.random.choice(unperturbed_genes, num_to_keep, replace=False)
+    perturbed_genes_to_keep = np.random.choice(
+        perturbed_genes, num_to_keep, replace=False
+    )
+    unperturbed_genes_to_keep = np.random.choice(
+        unperturbed_genes, num_to_keep, replace=False
+    )
     module_genes = np.concatenate([perturbed_genes_to_keep, unperturbed_genes_to_keep])
-    assert len(module_genes) == 2 * num_to_keep, "Module genes should be twice the number of perturbed genes kept."
+    assert len(module_genes) == 2 * num_to_keep, (
+        "Module genes should be twice the number of perturbed genes kept."
+    )
     return module_genes
 
 
@@ -235,19 +251,29 @@ def simulate_dataset(
     wandb.log(
         {
             "R1 (mod1 genes)": wandb.Image(
-                visualize_matrix(R1, gene_indices=mod1_genes, title=f"R1 (mod1 genes), sigma {sigma}")
+                visualize_matrix(
+                    R1, gene_indices=mod1_genes, title=f"R1 (mod1 genes), sigma {sigma}"
+                )
             )
         }
     )
     wandb.log(
         {
             "R0 (mod0 genes)": wandb.Image(
-                visualize_matrix(R0, gene_indices=mod0_genes, title=f"R0 (mod0 genes), sigma {sigma}")
+                visualize_matrix(
+                    R0, gene_indices=mod0_genes, title=f"R0 (mod0 genes), sigma {sigma}"
+                )
             )
         }
     )
     wandb.log(
-        {"R1 (all genes)": wandb.Image(visualize_matrix(R1, gene_indices=None, title=f"R1 (all genes), sigma {sigma}"))}
+        {
+            "R1 (all genes)": wandb.Image(
+                visualize_matrix(
+                    R1, gene_indices=None, title=f"R1 (all genes), sigma {sigma}"
+                )
+            )
+        }
     )
     plt.close("all")
 
@@ -258,21 +284,33 @@ def simulate_dataset(
     wandb.log(
         {
             "Sigma1 (mod1 genes)": wandb.Image(
-                visualize_matrix(Sigma1, gene_indices=mod1_genes, title=f"Sigma1 (mod1 genes, sigma {sigma})")
+                visualize_matrix(
+                    Sigma1,
+                    gene_indices=mod1_genes,
+                    title=f"Sigma1 (mod1 genes, sigma {sigma})",
+                )
             )
         }
     )
     wandb.log(
         {
             "Sigma0 (mod0 genes)": wandb.Image(
-                visualize_matrix(Sigma0, gene_indices=mod0_genes, title=f"Sigma0 (mod0 genes, sigma {sigma})")
+                visualize_matrix(
+                    Sigma0,
+                    gene_indices=mod0_genes,
+                    title=f"Sigma0 (mod0 genes, sigma {sigma})",
+                )
             )
         }
     )
     wandb.log(
         {
             "Sigma1 (all genes)": wandb.Image(
-                visualize_matrix(Sigma1, gene_indices=None, title=f"Sigma1 (all genes), sigma {sigma}")
+                visualize_matrix(
+                    Sigma1,
+                    gene_indices=None,
+                    title=f"Sigma1 (all genes), sigma {sigma}",
+                )
             )
         }
     )
@@ -315,12 +353,17 @@ def _get_gene_list():
     return genes
 
 
-def stratified_train_val_test_split(labels, train_size=0.7, val_size=0.15, test_size=0.15, seed=None, logger=None):
+def stratified_train_val_test_split(
+    labels, train_size=0.7, val_size=0.15, test_size=0.15, seed=None, logger=None
+):
     assert abs(train_size + val_size + test_size - 1.0) < 1e-6, "Splits must sum to 1.0"
 
     # First split: train vs temp (val + test)
     train_inds, temp_inds = train_test_split(
-        labels.index, test_size=(val_size + test_size), stratify=labels, random_state=seed
+        labels.index,
+        test_size=(val_size + test_size),
+        stratify=labels,
+        random_state=seed,
     )
 
     # Second split: val vs test from temp
@@ -334,7 +377,9 @@ def stratified_train_val_test_split(labels, train_size=0.7, val_size=0.15, test_
     )
 
     if logger is not None:
-        for name, inds in zip(["training", "validation", "test"], [train_inds, val_inds, test_inds]):
+        for name, inds in zip(
+            ["training", "validation", "test"], [train_inds, val_inds, test_inds]
+        ):
             class_counts = labels.loc[inds].value_counts(normalize=True)
             logger.info(f"{name.title()} set: {len(inds)} samples")
             logger.info(f"Class distribution:\n{class_counts.to_string()}")
@@ -365,15 +410,26 @@ def train_model_pnet(hparams, genetic_data, y, train_inds=None, test_inds=None):
     )
 
     logger.info("Logging loss curve")
-    plt = report_and_eval.get_loss_plot(train_losses=train_losses, test_losses=test_losses)
+    plt = report_and_eval.get_loss_plot(
+        train_losses=train_losses, test_losses=test_losses
+    )
     wandb.log({"convergence plot": wandb.Image(plt)})
     report_and_eval.savefig(plt, os.path.join(hparams["save_dir"], "loss_over_time"))
     plt.close()
-    return model, train_losses, test_losses, train_dataset, test_dataset, model_save_path
+    return (
+        model,
+        train_losses,
+        test_losses,
+        train_dataset,
+        test_dataset,
+        model_save_path,
+    )
 
 
 # TODO: consider altering to take in train/val/test datasets instead of genetic_data and y, so can just use function from modeling_utils.py
-def evaluate_on_train_val_test(model, genetic_data, y, train_inds, val_inds, test_inds, hparams, task="BC"):
+def evaluate_on_train_val_test(
+    model, genetic_data, y, train_inds, val_inds, test_inds, hparams, task="BC"
+):
     """
     Evaluate a trained model on train, val, and test splits using PnetDataset.
 
@@ -386,10 +442,14 @@ def evaluate_on_train_val_test(model, genetic_data, y, train_inds, val_inds, tes
     """
     y = util.format_target(y, task)
 
-    for split_name, split_inds in zip(["train", "validation", "test"], [train_inds, val_inds, test_inds]):
+    for split_name, split_inds in zip(
+        ["train", "validation", "test"], [train_inds, val_inds, test_inds]
+    ):
         logger.info(f"Evaluating model on {split_name} set ({len(split_inds)} samples)")
 
-        split_dataset = pnet_loader.PnetDataset(genetic_data, target=y, indicies=split_inds)
+        split_dataset = pnet_loader.PnetDataset(
+            genetic_data, target=y, indicies=split_inds
+        )
 
         report_and_eval.evaluate_interpret_save(
             model=model,
@@ -405,12 +465,21 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Generate simulated data by sampling from joint distribution defined by an odds ratio and a sigma."
     )
-    parser.add_argument("--odds_ratio", type=float, default=10.0, help="Odds ratio to simulate")
     parser.add_argument(
-        "--sigma", type=float, default=0.0, help="Correlation strength between genes in the class-specific module"
+        "--odds_ratio", type=float, default=10.0, help="Odds ratio to simulate"
     )
-    parser.add_argument("--num_class1_samples", type=int, default=500, help="Number of class 1 samples")
-    parser.add_argument("--num_class0_samples", type=int, default=500, help="Number of class 0 samples")
+    parser.add_argument(
+        "--sigma",
+        type=float,
+        default=0.0,
+        help="Correlation strength between genes in the class-specific module",
+    )
+    parser.add_argument(
+        "--num_class1_samples", type=int, default=500, help="Number of class 1 samples"
+    )
+    parser.add_argument(
+        "--num_class0_samples", type=int, default=500, help="Number of class 0 samples"
+    )
     parser.add_argument(
         "--sampling_strategy",
         type=str,
@@ -418,11 +487,63 @@ def parse_args():
         choices=["binary", "continuous"],
         help="Sampling type: 'binary' or 'continuous' (default: continuous)",
     )
-    parser.add_argument("--epochs", type=int, default=500, help="Number of epochs to run ML model")
+    parser.add_argument(
+        "--epochs", type=int, default=500, help="Number of epochs to run ML model"
+    )
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
-    parser.add_argument("--model_type", type=str, default="pnet", help="Model type (default: pnet)")
-    parser.add_argument("--evaluation_set", type=str, default="validation", help="Evaluation set (default: validation)")
-    parser.add_argument("--wandb_group", type=str, default="simulated_data_001", help="wandb group name")
+    parser.add_argument(
+        "--model_type",
+        type=str,
+        default="pnet",
+        choices=["pnet", "rf", "bdt", "logistic_regression"],
+        help="Model type: pnet, rf, bdt, or logistic_regression (default: pnet)",
+    )
+    parser.add_argument(
+        "--evaluation_set",
+        type=str,
+        default="validation",
+        help="Evaluation set (default: validation)",
+    )
+    parser.add_argument(
+        "--wandb_group", type=str, default="simulated_data_001", help="wandb group name"
+    )
+    parser.add_argument(
+        "--min_samples_split",
+        type=int,
+        default=50,
+        help="Minimum samples to split for RF (default: 50)",
+    )
+    parser.add_argument(
+        "--min_samples_leaf",
+        type=int,
+        default=1,
+        help="Minimum samples at leaf for RF (default: 1)",
+    )
+    parser.add_argument(
+        "--max_depth",
+        type=int,
+        default=None,
+        help="Maximum depth for RF (default: None)",
+    )
+    parser.add_argument(
+        "--l1_penalty",
+        type=float,
+        default=1.0,
+        help="Inverse regularization strength for logistic regression (C parameter). Lower values = stronger regularization (default: 1.0)",
+    )
+    parser.add_argument(
+        "--logistic_penalty_type",
+        type=str,
+        default="l1",
+        choices=["l1", "l2", "elasticnet"],
+        help="Penalty type for logistic regression: l1 (Lasso), l2 (Ridge), or elasticnet (default: l1)",
+    )
+    parser.add_argument(
+        "--logistic_l1_ratio",
+        type=float,
+        default=0.5,
+        help="L1 vs L2 balance for elasticnet (0-1). 0=pure L2, 1=pure L1 (default: 0.5)",
+    )
     return parser.parse_args()
 
 
@@ -431,7 +552,12 @@ def main():
 
     run_name = f"OR_{args.odds_ratio}_sigma_{args.sigma}_n1_{args.num_class1_samples}_n0_{args.num_class0_samples}"
     logger.info(f"Starting run: {run_name}")
-    run = wandb.init(project="prostate_met_status", group=args.wandb_group, name=run_name, reinit=True)
+    run = wandb.init(
+        project="prostate_met_status",
+        group=args.wandb_group,
+        name=run_name,
+        reinit=True,
+    )
 
     save_dir = f"/mnt/disks/gmiller_data1/pnet/results/{args.wandb_group}/{args.model_type}_eval_set_{args.evaluation_set}/wandbID_{run.id}"
     logger.info(f"Results will be saved to {save_dir}")
@@ -471,7 +597,9 @@ def main():
     )
 
     logger.info("Prepping simulated data for PNET...")
-    gene_names = _get_gene_list()[: X.shape[1]]  # Ensure gene_names matches the number of columns in X
+    gene_names = _get_gene_list()[
+        : X.shape[1]
+    ]  # Ensure gene_names matches the number of columns in X
     assert len(gene_names) == X.shape[1], "Not enough gene names for number of features"
     X, mod0_genes, mod1_genes, deltaMuGenes = add_gene_names(
         X, mod0_genes, mod1_genes, deltaMuGenes, gene_names=gene_names
@@ -482,7 +610,11 @@ def main():
 
     # add sample IDs to y, make y a pandas DF, ensure class is type int
     y = pd.DataFrame(y.astype(int), index=X.index, columns=["class"])
-    genetic_data = {"simulated_binary": X} if base_hparams["sample_binary"] else {"simulated_continuous": X}
+    genetic_data = (
+        {"simulated_binary": X}
+        if base_hparams["sample_binary"]
+        else {"simulated_continuous": X}
+    )
     logger.info("Simulated data prepared for PNET.")
 
     # Make train/val/test indicies with equal class balance in 70/15/15 split
@@ -514,7 +646,9 @@ def main():
     }
     run.config.update(hparams)
 
-    logger.info(f"Running {args.model_type} model on simulated data with hparams: {hparams}")
+    logger.info(
+        f"Running {args.model_type} model on simulated data with hparams: {hparams}"
+    )
     if args.model_type == "pnet":
         model, _, _, train_dataset, val_dataset, model_save_path = train_model_pnet(
             hparams, genetic_data, y, train_inds=train_inds, test_inds=val_inds
@@ -533,6 +667,69 @@ def main():
         modeling_utils.cleanup(
             model_save_path=model_save_path,
             delete_model_after_training=hparams["delete_model_after_training"],
+        )
+    elif args.model_type in ["rf", "bdt", "logistic_regression"]:
+        # For sklearn models, we need to create datasets and concatenate genetic data
+        train_dataset = pnet_loader.generate_dataset_from_indices(
+            genetic_data=genetic_data,
+            target=y,
+            dset_inds=train_inds,
+            additional_data=None,
+            gene_set=None,
+            seed=args.seed,
+        )
+        val_dataset = pnet_loader.generate_dataset_from_indices(
+            genetic_data=genetic_data,
+            target=y,
+            dset_inds=val_inds,
+            additional_data=None,
+            gene_set=None,
+            seed=args.seed,
+        )
+        test_dataset = pnet_loader.generate_dataset_from_indices(
+            genetic_data=genetic_data,
+            target=y,
+            dset_inds=test_inds,
+            additional_data=None,
+            gene_set=None,
+            seed=args.seed,
+        )
+
+        if args.model_type == "rf":
+            logger.info("Training Random Forest model on simulated data")
+            model = modeling_utils.train_model_rf(
+                train_dataset,
+                min_samples_split=args.min_samples_split,
+                max_depth=args.max_depth,
+                min_samples_leaf=args.min_samples_leaf,
+                random_seed=args.seed,
+            )
+        elif args.model_type == "bdt":
+            logger.info("Training Gradient Boosting model on simulated data")
+            model, _, _ = modeling_utils.train_model_bdt(
+                train_dataset, val_dataset, "validation"
+            )
+        elif args.model_type == "logistic_regression":
+            logger.info("Training Logistic Regression model on simulated data")
+            lr_params = {
+                "l1_penalty": args.l1_penalty,
+                "logistic_penalty_type": args.logistic_penalty_type,
+                "logistic_l1_ratio": args.logistic_l1_ratio,
+            }
+            run.config.update(lr_params)
+            model = modeling_utils.train_model_logistic_regression(
+                train_dataset,
+                penalty=args.logistic_penalty_type,
+                C=args.l1_penalty,
+                l1_ratio=args.logistic_l1_ratio
+                if args.logistic_penalty_type == "elasticnet"
+                else None,
+                random_seed=args.seed,
+            )
+
+        # Evaluate on all splits
+        modeling_utils.evaluate_on_train_val_test(
+            model, train_dataset, val_dataset, test_dataset, hparams
         )
     else:
         raise ValueError(

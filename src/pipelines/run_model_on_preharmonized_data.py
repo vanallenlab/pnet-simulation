@@ -4,14 +4,20 @@
 
 import logging
 import os
+import warnings
 
 import configargparse
+import numpy as np
 import pandas as pd
 import torch
+from sklearn.utils.class_weight import compute_class_weight
 
 import wandb
 from pnet import Pnet, pnet_loader, report_and_eval
 from pnet.utils import modeling_utils
+
+warnings.simplefilter(action="ignore", category=FutureWarning)
+
 
 logging.basicConfig(
     encoding="utf-8",
@@ -26,8 +32,20 @@ logger = logging.getLogger(__name__)
 
 def parse_arguments():
     parser = configargparse.ArgumentParser(description="Description of your script")
-    parser.add("--config_f", type=str, required=False, is_config_file=True, help="Path to a config file")
-    parser.add("--data_config_f", type=str, required=True, is_config_file=False, help="Path to a config file")
+    parser.add(
+        "--config_f",
+        type=str,
+        required=False,
+        is_config_file=True,
+        help="Path to a config file",
+    )
+    parser.add(
+        "--data_config_f",
+        type=str,
+        required=True,
+        is_config_file=False,
+        help="Path to a config file",
+    )
     parser.add(
         "--datasets",
         default=["somatic_amp", "somatic_del", "somatic_mut"],
@@ -40,14 +58,21 @@ def parse_arguments():
         choices=["validation", "test"],
         help="Evaluation set (validation or test)",
     )
-    parser.add("--model_type", default="bdt", choices=["bdt", "rf", "pnet"], help="Type of model")
+    parser.add(
+        "--model_type",
+        default="bdt",
+        choices=["bdt", "rf", "pnet", "logistic_regression"],
+        help="Type of model",
+    )
     parser.add("--wandb_group", default="", help="Wandb group name")
-    parser.add("--wandb_project", default="prostate_met_status", help="Wandb group name")
+    parser.add(
+        "--wandb_project", default="prostate_met_status", help="Wandb group name"
+    )
     parser.add("--seed", type=int, default=123, help="Seed value")
     parser.add("--input_data_dir", help="Directory with model-ready data")
     parser.add(
-        "--data_split_dir",
-        default="../../pnet_germline/data/pnet_database/prostate/splits",
+        "--data_split_dir",  # TODO: remove hard-coded default path
+        default="/mnt/disks/gmiller_data1/pnet_germline/data/pnet_database/prostate/splits",
         help="Directory with data split files",
     )
     parser.add(
@@ -56,10 +81,16 @@ def parse_arguments():
         help="W&B run ID that created the data in the input_data_dir, if applicable",
     )
     parser.add(
-        "--cpus", type=int, required=False, help="Define the number of CPUs PyTorch uses during parallelization tasks"
+        "--cpus",
+        type=int,
+        required=False,
+        help="Define the number of CPUs PyTorch uses during parallelization tasks",
     )
     parser.add(
-        "--input_dropout", default=0.5, type=float, help="Proportion of dropout between the input layer and gene layer"
+        "--input_dropout",
+        default=0.5,
+        type=float,
+        help="Proportion of dropout between the input layer and gene layer",
     )
     parser.add(
         "--h1_alpha",
@@ -104,6 +135,62 @@ def parse_arguments():
         default=50,
         help="Define the min number of samples used to make RF split (best practice usually 5-10% of dataset)",
     )
+    parser.add(
+        "--weight_decay",
+        type=float,
+        default=1e-3,
+        help="Weight decay for optimizer regularization (default: 1e-3)",
+    )
+    parser.add(
+        "--lr",
+        type=float,
+        default=1e-3,
+        help="Learning rate for optimizer (default: 1e-3)",
+    )
+    parser.add(
+        "--dropout",
+        type=float,
+        default=0.2,
+        help="Dropout rate for neural network layers (default: 0.2)",
+    )
+    parser.add(
+        "--batch_size",
+        type=int,
+        default=64,
+        help="Batch size for training (default: 64)",
+    )
+    parser.add(
+        "--early_stopping_patience",
+        type=int,
+        default=50,
+        help="Early stopping patience (number of epochs with no improvement before stopping) (default: 50)",
+    )
+    parser.add(
+        "--class_weight",
+        type=str,
+        default="none",
+        choices=["none", "balanced"],
+        help="Class weighting strategy: 'none' for no weighting, 'balanced' for inverse frequency weighting (default: none)",
+    )
+    parser.add(
+        "--l1_penalty",
+        type=float,
+        default=1.0,
+        help="Inverse of regularization strength for logistic regression (C parameter). Lower values indicate stronger regularization. Only applies to logistic_regression model type (default: 1.0)",
+    )
+    parser.add(
+        "--logistic_penalty_type",
+        type=str,
+        default="l1",
+        choices=["l1", "l2", "elasticnet"],
+        help="Type of penalty for logistic regression: 'l1' (Lasso), 'l2' (Ridge), or 'elasticnet' (combination). Only applies to logistic_regression model type (default: l1)",
+    )
+    parser.add(
+        "--logistic_l1_ratio",
+        type=float,
+        default=0.5,
+        help="Balance between L1 and L2 regularization when using elasticnet penalty (0 to 1). 0 = pure L2, 1 = pure L1. Only applies to logistic_regression model type (default: 0.5)",
+    )
     return parser.parse_args()
 
 
@@ -115,10 +202,48 @@ def load_input_data(config, input_dir):
         df = pd.read_csv(path, index_col=0)
         genetic_data[name] = df
 
-    confounder_df = pd.read_csv(os.path.join(input_dir, config["confounder_data"]["filename"]), index_col=0)
-    target_df = pd.read_csv(os.path.join(input_dir, config["target"]["filename"]), index_col=0)
+    confounder_df = pd.read_csv(
+        os.path.join(input_dir, config["confounder_data"]["filename"]), index_col=0
+    )
+    target_df = pd.read_csv(
+        os.path.join(input_dir, config["target"]["filename"]), index_col=0
+    )
 
     return genetic_data, confounder_df, target_df
+
+
+def calculate_class_weights(y, strategy="balanced"):
+    """
+    Calculate class weights for imbalanced datasets.
+
+    Args:
+        y: Target labels (array-like)
+        strategy: 'balanced' for inverse frequency weighting
+
+    Returns:
+        torch.Tensor of class weights, or None if strategy is 'none'
+    """
+    if strategy == "none":
+        return None
+
+    # Get unique classes and ensure they are 0-indexed and contiguous
+    unique_classes = np.unique(y)
+    logger.info(f"Unique classes: {unique_classes}")
+
+    # Validate that classes are 0, 1, 2, ...
+    expected_classes = np.arange(len(unique_classes))
+    if not np.array_equal(unique_classes, expected_classes):
+        raise ValueError(
+            f"Classes must be 0-indexed and contiguous (0, 1, 2, ...). "
+            f"Found: {unique_classes}. Expected: {expected_classes}"
+        )
+
+    if strategy == "balanced":
+        class_weights = compute_class_weight("balanced", classes=unique_classes, y=y)
+        logger.info(f"Calculated balanced class weights: {class_weights}")
+        return torch.tensor(class_weights, dtype=torch.float32)
+
+    return None
 
 
 def main():
@@ -129,7 +254,9 @@ def main():
     logger.info(f"Starting run with ID: {wandb.run.id}")
     # Set environment
     Pnet.set_random_seeds(args.seed, turn_off_cuDNN=False)
-    torch.set_num_threads(args.cpus)
+    # Only set PyTorch thread count when user provided a value
+    if args.cpus:
+        torch.set_num_threads(int(args.cpus))
 
     # Load config and data
     config = modeling_utils.read_config(args.data_config_f)
@@ -138,33 +265,45 @@ def main():
 
     # Load splits
     # train_inds, eval_inds, train_f, eval_f = get_train_eval_indices(args.data_split_dir, args.evaluation_set)
-    train_inds, validation_inds, test_inds = modeling_utils.get_train_val_test_indices(args.data_split_dir)
+    train_inds, validation_inds, test_inds = modeling_utils.get_train_val_test_indices(
+        args.data_split_dir
+    )
     if args.evaluation_set == "validation":
         eval_inds = validation_inds
     elif args.evaluation_set == "test":
         eval_inds = test_inds
 
     # Setup save path
-    save_dir = modeling_utils.setup_save_dir(args.model_type, args.evaluation_set, args.wandb_group, wandb.run.id)
+    save_dir = modeling_utils.setup_save_dir(
+        args.model_type, args.evaluation_set, args.wandb_group, wandb.run.id
+    )
 
     # Log info
     logger.info(f"Training on datasets: {list(genetic_data.keys())}")
     report_and_eval.report_df_info_with_names(genetic_data, n=5)
-    report_and_eval.report_df_info_with_names({"confounders": confounder_df, "y": y}, n=5)
+    report_and_eval.report_df_info_with_names(
+        {"confounders": confounder_df, "y": y}, n=5
+    )
+
+    # Calculate class weights if requested
+    loss_weight = calculate_class_weights(
+        y.values.flatten(), strategy=args.class_weight
+    )
 
     # Build hparams
     hparams = {
         "wandb_run_id_that_created_inputs": args.input_data_wandb_id,
         "nbr_gene_inputs": len(genetic_data),
-        "dropout": 0.2,
+        "dropout": args.dropout,
         "input_dropout": args.input_dropout,
         "additional_dims": confounder_df.shape[1],
         "output_dim": 1,
-        "lr": 1e-3,
-        "weight_decay": 1e-3,
+        "lr": args.lr,
+        "weight_decay": args.weight_decay,
         "epochs": args.epochs,
         "early_stopping": True,
-        "batch_size": 64,
+        "early_stopping_patience": args.early_stopping_patience,
+        "batch_size": args.batch_size,
         "verbose": True,
         "data_split_dir": args.data_split_dir,
         "train_set_indices": train_inds,
@@ -176,6 +315,8 @@ def main():
         "evaluation_set": args.evaluation_set,
         "save_dir": save_dir,
         "delete_model_after_training": True,  # Set to True to delete the model file after training
+        "class_weight": args.class_weight,
+        "loss_weight": loss_weight,  # calculated based on value of args.class_weight
     }
     wandb.config.update(hparams)
 
@@ -189,7 +330,7 @@ def main():
         gene_set=None,
         seed=args.seed,
     )
-    if args.model_type in ["rf", "bdt"]:
+    if args.model_type in ["rf", "bdt", "logistic_regression"]:
         train_dataset, validation_dataset = pnet_loader.generate_train_test(
             genetic_data,
             additional_data=confounder_df,
@@ -198,18 +339,27 @@ def main():
             test_inds=eval_inds,
             gene_set=None,
         )
-        # concatenate additional data to the input_df and x to match RF/BDT expectations
-        train_dataset.input_df = pd.concat([train_dataset.input_df, train_dataset.additional_data], axis=1)
+        # concatenate additional data to the input_df and x to match RF/BDT/logistic regression expectations
+        train_dataset.input_df = pd.concat(
+            [train_dataset.input_df, train_dataset.additional_data], axis=1
+        )
         train_dataset.x = torch.cat([train_dataset.x, train_dataset.additional], dim=1)
         validation_dataset.input_df = pd.concat(
             [validation_dataset.input_df, validation_dataset.additional_data], axis=1
         )
-        validation_dataset.x = torch.cat([validation_dataset.x, validation_dataset.additional], dim=1)
-        test_dataset.input_df = pd.concat([test_dataset.input_df, test_dataset.additional_data], axis=1)
+        validation_dataset.x = torch.cat(
+            [validation_dataset.x, validation_dataset.additional], dim=1
+        )
+        test_dataset.input_df = pd.concat(
+            [test_dataset.input_df, test_dataset.additional_data], axis=1
+        )
         test_dataset.x = torch.cat([test_dataset.x, test_dataset.additional], dim=1)
 
         if args.model_type == "rf":
-            rf_params = {"min_samples_leaf": args.min_samples_leaf, "min_samples_split": args.min_samples_split}
+            rf_params = {
+                "min_samples_leaf": args.min_samples_leaf,
+                "min_samples_split": args.min_samples_split,
+            }
             wandb.config.update(rf_params)
             model = modeling_utils.train_model_rf(
                 train_dataset,
@@ -218,17 +368,37 @@ def main():
                 min_samples_leaf=args.min_samples_leaf,
                 random_seed=args.seed,
             )
-        else:
-            model, _, _ = modeling_utils.train_model_bdt(train_dataset, validation_dataset, args.evaluation_set)
+        elif args.model_type == "bdt":
+            model, _, _ = modeling_utils.train_model_bdt(
+                train_dataset, validation_dataset, args.evaluation_set
+            )
+        elif args.model_type == "logistic_regression":
+            lr_params = {
+                "l1_penalty": args.l1_penalty,
+                "logistic_penalty_type": args.logistic_penalty_type,
+                "logistic_l1_ratio": args.logistic_l1_ratio,
+            }
+            wandb.config.update(lr_params)
+            model = modeling_utils.train_model_logistic_regression(
+                train_dataset,
+                penalty=args.logistic_penalty_type,
+                C=args.l1_penalty,
+                l1_ratio=args.logistic_l1_ratio
+                if args.logistic_penalty_type == "elasticnet"
+                else None,
+                random_seed=args.seed,
+            )
 
     elif args.model_type == "pnet":
-        model, _, _, train_dataset, validation_dataset, model_save_path = modeling_utils.train_model_pnet(
-            hparams, genetic_data, confounder_df, y
+        model, _, _, train_dataset, validation_dataset, model_save_path = (
+            modeling_utils.train_model_pnet(hparams, genetic_data, confounder_df, y)
         )
 
     # Evaluate and log results
     logger.info("Model training complete. Evaluating model...")
-    modeling_utils.evaluate_on_train_val_test(model, train_dataset, validation_dataset, test_dataset, hparams)
+    modeling_utils.evaluate_on_train_val_test(
+        model, train_dataset, validation_dataset, test_dataset, hparams
+    )
 
     # Clean up bulky pytorch model file if specified
     if args.model_type == "pnet":
@@ -239,7 +409,7 @@ def main():
 
     logger.info("Run complete. Finishing wandb.")
     wandb.finish()
-    return wandb.run.id
+    return
 
 
 if __name__ == "__main__":
