@@ -1,0 +1,41 @@
+method: grid
+parameters:
+  cpus:
+    value: 2
+  data_config_f:
+    value: /mnt/disks/gmiller_data1/pnet-simu-private/configs/data.yaml
+  datasets:
+    values:
+    - somatic_amp somatic_del somatic_mut
+    - somatic_amp somatic_del somatic_mut germline_rare_lof
+    - somatic_amp somatic_del somatic_mut germline_rare_common_lof_missense
+    - somatic_amp somatic_del somatic_mut germline_rare_lof_missense
+    - somatic_amp somatic_del somatic_mut germline_common_lof_missense
+    - somatic_amp somatic_del somatic_mut germline_rare_common_missense
+  evaluation_set:
+    values:
+    - validation
+  input_data_dir:
+    value: /mnt/disks/gmiller_data1/pnet_germline/processed/wandb-group-data_prep_germline_tier12_and_somatic/converted-IDs-to-somatic_imputed-germline_True_imputed-somatic_False_paired-samples-True/wandb-run-id-u5yt90p1
+  input_data_wandb_id:
+    value: u5yt90p1
+  model_type:
+    values:
+    - logistic_regression
+  logistic_penalty_type:
+    value: "l1"
+  l1_penalty:
+    value: 1
+  seed:
+    values:
+    - 123
+    # - 42
+    # - 155
+    # - 23
+    # - 356
+  cv_folds:
+    value: 5
+  wandb_group:
+    value: reviewers_CV_logistic_regression_p1000_v001
+program: /mnt/disks/gmiller_data1/pnet-simu-private/src/pipelines/run_CV_model_on_preharmonized_data.py
+project: "pnet_paper_CV"
