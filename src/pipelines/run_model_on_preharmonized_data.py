@@ -72,7 +72,7 @@ def parse_arguments():
     parser.add("--input_data_dir", help="Directory with model-ready data")
     parser.add(
         "--data_split_dir",  # TODO: remove hard-coded default path
-        default="/mnt/disks/gmiller_data1/pnet_germline/data/pnet_database/prostate/splits",
+        default="/mnt/disks/gmiller_data1/pnet-simu-private/data/pnet_database/prostate/splits",
         help="Directory with data split files",
     )
     parser.add(
@@ -191,6 +191,19 @@ def parse_arguments():
         default=0.5,
         help="Balance between L1 and L2 regularization when using elasticnet penalty (0 to 1). 0 = pure L2, 1 = pure L1. Only applies to logistic_regression model type (default: 0.5)",
     )
+    parser.add(
+        "--splits_path",
+        type=str,
+        default=None,
+        help="Path to repeated splits pickle. If provided, overrides split CSV loading.",
+    )
+    parser.add(
+        "--split_id",
+        type=int,
+        default=None,
+        help="Which split to use from splits_path (0..n_splits-1). Required if splits_path is set.",
+    )
+
     return parser.parse_args()
 
 
@@ -249,7 +262,11 @@ def calculate_class_weights(y, strategy="balanced"):
 def main():
     args = parse_arguments()
     wandb.login()
-    wandb.init(project=args.wandb_project, group=args.wandb_group)
+    run_name = None
+    if args.splits_path is not None:
+        run_name = f"{args.model_type}_split{int(args.split_id):02d}"
+
+    wandb.init(project=args.wandb_project, group=args.wandb_group, name=run_name)
 
     logger.info(f"Starting run with ID: {wandb.run.id}")
     # Set environment
@@ -264,10 +281,24 @@ def main():
     genetic_data = {k: v for k, v in genetic_data.items() if k in args.datasets}
 
     # Load splits
-    # train_inds, eval_inds, train_f, eval_f = get_train_eval_indices(args.data_split_dir, args.evaluation_set)
-    train_inds, validation_inds, test_inds = modeling_utils.get_train_val_test_indices(
-        args.data_split_dir
-    )
+    if args.splits_path is not None:
+        if args.split_id is None:
+            raise ValueError("--split_id is required when --splits_path is provided")
+        logger.info(f"Loading splits from {args.splits_path}")
+        train_inds, validation_inds, test_inds = (
+            modeling_utils.get_train_val_test_indices_from_pickle(
+                args.splits_path, args.split_id
+            )
+        )
+        wandb.config.update(
+            {"splits_path": args.splits_path, "split_id": int(args.split_id)}
+        )
+    else:
+        # Load static train/val/test split that was used in the OG P-NET paper
+        train_inds, validation_inds, test_inds = (
+            modeling_utils.get_train_val_test_indices(args.data_split_dir)
+        )
+
     if args.evaluation_set == "validation":
         eval_inds = validation_inds
     elif args.evaluation_set == "test":
@@ -318,7 +349,12 @@ def main():
         "class_weight": args.class_weight,
         "loss_weight": loss_weight,  # calculated based on value of args.class_weight
     }
-    wandb.config.update(hparams)
+
+    # Lightweight version to log to W&B (no giant ID lists)
+    wandb_hparams = dict(hparams)
+    for k in ["train_set_indices", "evaluation_set_indices", "test_set_indices"]:
+        wandb_hparams.pop(k, None)
+    wandb.config.update(wandb_hparams)
 
     # Training
     logger.info("Prepping datasets & training...")

@@ -1,5 +1,6 @@
 import logging
 import os
+import pickle
 
 import configargparse
 import numpy as np
@@ -101,6 +102,40 @@ def get_train_eval_indices(split_dir, eval_set):
     ).index.tolist()
 
     return train_ids, eval_ids, train_f, eval_f
+
+
+def get_train_val_test_indices_from_pickle(splits_path: str, split_id: int):
+    """
+    Load explicit train/val/test sample IDs from a repeated-splits pickle.
+
+    Expected structure:
+      obj = {"splits": [{"split_id": int, "train_ids": [...], "val_ids": [...], "test_ids": [...]}, ...]}
+
+    Returns:
+      train_inds, validation_inds, test_inds (lists of sample IDs)
+    """
+    if splits_path is None:
+        raise ValueError("splits_path is None")
+    if split_id is None:
+        raise ValueError("split_id must be provided when splits_path is set")
+
+    with open(splits_path, "rb") as f:
+        obj = pickle.load(f)
+
+    splits = obj["splits"]
+    # find the requested split
+    match = None
+    for s in splits:
+        if int(s.get("split_id", -1)) == int(split_id):
+            match = s
+            break
+    if match is None:
+        raise ValueError(f"split_id={split_id} not found in {splits_path}")
+
+    train_inds = list(match["train_ids"])
+    validation_inds = list(match["val_ids"])
+    test_inds = list(match["test_ids"])
+    return train_inds, validation_inds, test_inds
 
 
 def setup_save_dir(
