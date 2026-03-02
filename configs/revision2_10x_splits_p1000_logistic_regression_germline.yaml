@@ -1,0 +1,35 @@
+method: grid
+parameters:
+  cpus:
+    value: 2
+  data_config_f:
+    value: /mnt/disks/gmiller_data1/pnet-simu-private/configs/data.yaml
+  datasets:
+    values:
+    - germline_rare_lof
+    - germline_rare_common_missense # aka rare_missense since no common
+    - germline_rare_lof_missense
+  evaluation_set:
+    values:
+    - validation
+  input_data_dir:
+    value: /mnt/disks/gmiller_data1/pnet_germline/processed/wandb-group-data_prep_germline_tier12_and_somatic/converted-IDs-to-somatic_imputed-germline_True_imputed-somatic_False_paired-samples-True/wandb-run-id-u5yt90p1
+  input_data_wandb_id:
+    value: u5yt90p1
+  model_type:
+    values:
+    - logistic_regression
+  logistic_penalty_type:
+    value: "l1"
+  l1_penalty:
+    value: 10
+  seed:
+    value: 123
+  splits_path:
+    value: /mnt/disks/gmiller_data1/pnet-simu-private/data/pnet_database/prostate/splits/splits_10x_train759_val89_test95_seed123.pkl
+  split_id:
+    values: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  wandb_group:
+    value: revision2_10x_splits_p1000
+program: /mnt/disks/gmiller_data1/pnet-simu-private/src/pipelines/run_model_on_preharmonized_data.py
+project: prostate_met_status

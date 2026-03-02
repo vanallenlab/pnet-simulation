@@ -94,3 +94,4 @@ parameters:
   wandb_project:
     value: prostate_met_status
 program: /mnt/disks/gmiller_data1/pnet/src/pnet/run_model_on_perturbed_data.py
+project: "prostate_met_status"

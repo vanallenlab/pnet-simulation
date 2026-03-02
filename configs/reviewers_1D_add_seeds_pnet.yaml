@@ -13,13 +13,9 @@ parameters:
     value: /mnt/disks/gmiller_data1/pnet_germline/processed/wandb-group-data_prep_germline_tier12_and_somatic/converted-IDs-to-somatic_imputed-germline_True_imputed-somatic_False_paired-samples-True/wandb-run-id-u5yt90p1
   input_data_wandb_id:
     value: u5yt90p1
-  max_depth:
-    value: 2
-  min_samples_leaf:
-    value: 100
   model_type:
     values:
-    - rf
+    - pnet
   perturbation_suffix:
     values:
     - gene-AR_OR-1_ctrlFreq-0p001_caseFreq-0p001_nFeatures-10
@@ -89,13 +85,8 @@ parameters:
   perturbed_data_wandb_id:
     value: hvu4lf2q
   seed:
-    values:
-    - 123
-    - 42
-    - 155
+    values: [789, 999, 101, 7, 88]
   wandb_group:
-    value: single_gene_perturbation_003
-  wandb_project:
-    value: prostate_met_status
+    value: reviewers_pnet_1D
 program: /mnt/disks/gmiller_data1/pnet-simu-private/src/pipelines/run_model_on_perturbed_data.py
-project: prostate_met_status
+project: "prostate_met_status"

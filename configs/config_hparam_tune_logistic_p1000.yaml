@@ -1,0 +1,34 @@
+# P1000 logistic regression hyperparameter tuning
+# Tuned for somatic-only and germline-only datasets
+
+project: "prostate_met_status"
+
+program: /mnt/disks/gmiller_data1/pnet-simu-private/src/pipelines/run_model_on_preharmonized_data.py
+method: grid
+parameters:
+  datasets:
+    values:
+      - "somatic_amp somatic_del somatic_mut"
+      - "germline_rare_common_lof_missense"
+  data_config_f:
+    value: /mnt/disks/gmiller_data1/pnet-simu-private/configs/data.yaml
+  evaluation_set:
+    values: ["validation"]
+  model_type:
+    values: ["logistic_regression"]
+  logistic_penalty_type:
+    value: "l1"
+  l1_penalty:
+    values: [0.001, 0.01, 0.1, 1.0, 10.0, 100.0]
+  wandb_group:
+    value: "hparam_tune_logistic_regression"
+  wandb_project:
+    value: "prostate_met_status"
+  seed:
+    values: [123]
+  input_data_wandb_id:
+    value: "u5yt90p1"
+  input_data_dir:
+    value: /mnt/disks/gmiller_data1/pnet_germline/processed/wandb-group-data_prep_germline_tier12_and_somatic/converted-IDs-to-somatic_imputed-germline_True_imputed-somatic_False_paired-samples-True/wandb-run-id-u5yt90p1
+  cpus:
+    value: 8
