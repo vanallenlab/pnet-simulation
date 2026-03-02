@@ -55,10 +55,16 @@ def parse_arguments():
         description="Prepare the P1000 somatic data with germline data as model inputs. Harmonize the identifiers used, and optionally zero-impute non-overlapping genes to preserve the union of genes."
     )
     parser.add_argument("--wandb_group", default="", help="Wandb group name")
-    parser.add_argument("--use_only_paired", action="store_true", help="Use only paired")
+    parser.add_argument(
+        "--use_only_paired", action="store_true", help="Use only paired"
+    )
     parser.add_argument("--convert_ids_to", default="somatic", help="Convert IDs to")
-    parser.add_argument("--zero_impute_germline", action="store_true", help="Zero impute germline")
-    parser.add_argument("--zero_impute_somatic", action="store_true", help="Zero impute somatic")
+    parser.add_argument(
+        "--zero_impute_germline", action="store_true", help="Zero impute germline"
+    )
+    parser.add_argument(
+        "--zero_impute_somatic", action="store_true", help="Zero impute somatic"
+    )
     parser.add_argument(
         "--somatic_datadir",
         default=project_config.PNET_DATABASE_DIR
@@ -76,7 +82,9 @@ def parse_arguments():
         help="W&B run ID that created the data in the input_data_dir, if applicable",
     )
     parser.add_argument(
-        "--save_dir", default=project_config.PROCESSED_DATA_DIR, help="Directory storing model-ready input"
+        "--save_dir",
+        default=project_config.PROCESSED_DATA_DIR,
+        help="Directory storing model-ready input",
     )
     return parser.parse_args()
 
@@ -95,7 +103,9 @@ def log_parameters_to_wandb(params):
 def load_data(somatic_datadir, germline_datadir):
     somatic_datasets = {
         "somatic_mut": prostate_data_loaders.get_somatic_mutation(
-            os.path.join(somatic_datadir, "P1000_final_analysis_set_cross_important_only.csv")
+            os.path.join(
+                somatic_datadir, "P1000_final_analysis_set_cross_important_only.csv"
+            )
         ),
         "somatic_amp": prostate_data_loaders.get_somatic_amp_and_del(
             os.path.join(somatic_datadir, "P1000_data_CNA_paper.csv")
@@ -105,7 +115,9 @@ def load_data(somatic_datadir, germline_datadir):
         )[1],
     }
 
-    processed_germline_vcfs_dir = os.path.join(germline_datadir, "processed_germline_vcfs")
+    processed_germline_vcfs_dir = os.path.join(
+        germline_datadir, "processed_germline_vcfs"
+    )
     germline_datasets = {
         "germline_rare_lof": prostate_data_loaders.get_germline_mutation(
             os.path.join(
@@ -177,8 +189,12 @@ def harmonize_ids(somatic_datasets, germline_datasets, additional, y, convert_id
         convert_ids_to=convert_ids_to,
     )
 
-    germline_datasets = {key: value for key, value in zip(germline_datasets.keys(), germline_list)}
-    somatic_datasets = {key: value for key, value in zip(somatic_datasets.keys(), somatic_list)}
+    germline_datasets = {
+        key: value for key, value in zip(germline_datasets.keys(), germline_list)
+    }
+    somatic_datasets = {
+        key: value for key, value in zip(somatic_datasets.keys(), somatic_list)
+    }
 
     return germline_datasets, somatic_datasets
 
@@ -188,11 +204,17 @@ def restrict_to_paired_samples(somatic_datasets, germline_datasets, additional, 
     restricted_datasets = data_manipulation.restrict_to_overlapping_indices(
         *somatic_datasets.values(), *germline_datasets.values(), additional, y
     )
-    keys = list(somatic_datasets.keys()) + list(germline_datasets.keys()) + ["additional", "y"]
+    keys = (
+        list(somatic_datasets.keys())
+        + list(germline_datasets.keys())
+        + ["additional", "y"]
+    )
     return dict(zip(keys, restricted_datasets))
 
 
-def zero_impute_datasets(germline_datasets, somatic_datasets, zero_impute_germline, zero_impute_somatic):
+def zero_impute_datasets(
+    germline_datasets, somatic_datasets, zero_impute_germline, zero_impute_somatic
+):
     logging.info(
         f"Zero-imputing columns (genes) as defined by user (impute germline: {zero_impute_germline}, impute somatic: {zero_impute_somatic})"
     )
@@ -213,14 +235,20 @@ def zero_impute_datasets(germline_datasets, somatic_datasets, zero_impute_germli
             zero_impute_somatic=zero_impute_somatic,
         )
 
-    germline_datasets = {key: value for key, value in zip(germline_datasets.keys(), germline_list)}
-    somatic_datasets = {key: value for key, value in zip(somatic_datasets.keys(), somatic_list)}
+    germline_datasets = {
+        key: value for key, value in zip(germline_datasets.keys(), germline_list)
+    }
+    somatic_datasets = {
+        key: value for key, value in zip(somatic_datasets.keys(), somatic_list)
+    }
     return germline_datasets, somatic_datasets
 
 
 def restrict_to_common_genes(somatic_datasets, germline_datasets):
     all_datasets = list(somatic_datasets.values()) + list(germline_datasets.values())
-    restricted_datasets = prostate_data_loaders.restrict_to_genes_in_common(*all_datasets)
+    restricted_datasets = prostate_data_loaders.restrict_to_genes_in_common(
+        *all_datasets
+    )
     keys = list(somatic_datasets.keys()) + list(germline_datasets.keys())
     return dict(zip(keys, restricted_datasets))
 
@@ -233,14 +261,22 @@ def process_data(somatic_datasets, germline_datasets, additional, y, args):
         )
     if args.use_only_paired:
         # restrict DFs to overlapping samples
-        logging.debug(f"Somatic dataset indices: {[df.index.tolist() for df in somatic_datasets.values()]}")
-        logging.debug(f"Germline dataset indices: {[df.index.tolist() for df in germline_datasets.values()]}")
+        logging.debug(
+            f"Somatic dataset indices: {[df.index.tolist() for df in somatic_datasets.values()]}"
+        )
+        logging.debug(
+            f"Germline dataset indices: {[df.index.tolist() for df in germline_datasets.values()]}"
+        )
         logging.debug(f"Additional dataset indices: {additional.index.tolist()}")
         logging.debug(f"Target dataset indices: {y.index.tolist()}")
-        datasets = restrict_to_paired_samples(somatic_datasets, germline_datasets, additional, y)
+        datasets = restrict_to_paired_samples(
+            somatic_datasets, germline_datasets, additional, y
+        )
         somatic_datasets = {k: datasets[k] for k in somatic_datasets}
         germline_datasets = {k: datasets[k] for k in germline_datasets}
         additional, y = datasets["additional"], datasets["y"]
+
+    # TODO: before zero-imputation, check if the germline datasets have any non-zero overlap with the TCGA prostate genes. Warn if not, because that filtration is coming up!
 
     # perform zero-imputation according to args
     germline_datasets, somatic_datasets = zero_impute_datasets(
@@ -277,9 +313,13 @@ def main():
     )
 
     logging.info("Loading data")
-    somatic_datasets, germline_datasets = load_data(args.somatic_datadir, args.germline_datadir)
+    somatic_datasets, germline_datasets = load_data(
+        args.somatic_datadir, args.germline_datadir
+    )
     y = prostate_data_loaders.get_target(
-        os.path.join(args.germline_datadir, "metadata/germline_somatic_id_map_outer_join.csv"),
+        os.path.join(
+            args.germline_datadir, "metadata/germline_somatic_id_map_outer_join.csv"
+        ),
         os.path.join(
             args.germline_datadir,
             "metadata/pathogenic_variants_with_clinical_annotation_1341_aug2021_correlation.csv",
@@ -292,7 +332,9 @@ def main():
             args.germline_datadir,
             "metadata/pathogenic_variants_with_clinical_annotation_1341_aug2021_correlation.csv",
         ),
-        os.path.join(args.germline_datadir, "metadata/germline_somatic_id_map_outer_join.csv"),
+        os.path.join(
+            args.germline_datadir, "metadata/germline_somatic_id_map_outer_join.csv"
+        ),
         cols_to_include=[
             "PCA1",
             "PCA2",
@@ -315,7 +357,9 @@ def main():
         "somatic_datadir": args.somatic_datadir,
         "germline_datadir": args.germline_datadir,
         "save_dir": SAVE_DIR,
-        "id_map_f": os.path.join(args.germline_datadir, "metadata/germline_somatic_id_map_outer_join.csv"),
+        "id_map_f": os.path.join(
+            args.germline_datadir, "metadata/germline_somatic_id_map_outer_join.csv"
+        ),
         "sample_metadata_f": os.path.join(
             args.germline_datadir,
             "metadata/pathogenic_variants_with_clinical_annotation_1341_aug2021_correlation.csv",
