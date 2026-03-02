@@ -941,9 +941,9 @@ def plot_model_comparison_with_features(
     return fig
 
 
-def plot_paired_seeds(df_runs, a, b, labels=None):
+def plot_paired_seeds(df_runs, a, b, labels=None, replicate_col="random_seed"):
     sub = df_runs[df_runs["datasets"].isin([a, b])]
-    wide = sub.pivot(index="random_seed", columns="datasets", values="rank")
+    wide = sub.pivot(index=replicate_col, columns="datasets", values="rank")
 
     fig, ax = plt.subplots(figsize=(3.5, 4))
     for _, row in wide.iterrows():
@@ -1018,6 +1018,7 @@ def plot_paired_gene_rank_with_feature_caption(
     features,
     dataset_labels=None,
     title="Per-seed BRCA2 rank",
+    replicate_col="random_seed",
 ):
     """
     Plot per-seed paired BRCA2 ranks for datasets a vs b, with an UpSet-style
@@ -1031,7 +1032,7 @@ def plot_paired_gene_rank_with_feature_caption(
 
     # --- Prepare per-seed paired data ---
     sub = df_gene_rank_runs[df_gene_rank_runs["datasets"].isin([a, b])]
-    wide = sub.pivot(index="random_seed", columns="datasets", values="rank")
+    wide = sub.pivot(index=replicate_col, columns="datasets", values="rank")
 
     # --- Figure layout ---
     fig = plt.figure(figsize=(4, 5))

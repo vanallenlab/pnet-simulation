@@ -1,14 +1,82 @@
-import matplotlib.pyplot as plt
+import logging
+
 import numpy as np
 import pandas as pd
-import seaborn as sns
 from scipy.stats import wilcoxon
+from sklearn.metrics import average_precision_score
 from statsmodels.stats.multitest import multipletests
+from tqdm.auto import tqdm
+
+logger = logging.getLogger(__name__)
 
 
 # -------------------------
 # Core stats utilities
 # -------------------------
+def _percentile_ci(x: np.ndarray, alpha: float) -> tuple[float, float]:
+    x = np.asarray(x, dtype=float)
+    x = x[np.isfinite(x)]
+    if x.size == 0:
+        return (np.nan, np.nan)
+    return (float(np.quantile(x, alpha / 2)), float(np.quantile(x, 1 - alpha / 2)))
+
+
+def _bootstrap_indices(n: int, n_boot: int, rng: np.random.Generator) -> np.ndarray:
+    # shape (n_boot, n)
+    return rng.integers(0, n, size=(n_boot, n), endpoint=False)
+
+
+def _ciwidth_summary(df: pd.DataFrame, group_cols: list[str]) -> pd.DataFrame:
+    return (
+        df.groupby(group_cols, dropna=False, sort=False)["ci_width"]
+        .agg(
+            n_splits="count",
+            median_ci_width_across_splits="median",
+            mean_ci_width_across_splits="mean",
+            min_ci_width="min",
+            max_ci_width="max",
+        )
+        .reset_index()
+    )
+
+
+def _point_estimate_summary(
+    df: pd.DataFrame,
+    group_cols: list[str],
+    point_col: str,
+    out_prefix: str,
+) -> pd.DataFrame:
+    """
+    Summarize per-split point estimates across splits.
+
+    Parameters
+    ----------
+    df : per-split table (df_p1, df_p2, df_p3)
+    group_cols : grouping columns
+    point_col : column containing the per-split point estimate
+    out_prefix : prefix for output columns
+
+    Returns
+    -------
+    DataFrame with:
+      - n_splits
+      - mean_{prefix}_across_splits
+      - median_{prefix}_across_splits
+      - sd_{prefix}_across_splits
+    """
+    return (
+        df.groupby(group_cols, dropna=False, sort=False)[point_col]
+        .agg(
+            **{
+                f"mean_{out_prefix}_across_splits": "mean",
+                f"median_{out_prefix}_across_splits": "median",
+                f"sd_{out_prefix}_across_splits": "std",
+            },
+        )
+        .reset_index()
+    )
+
+
 def fdr_bh(pvals):
     """
     Benjamini-Hochberg FDR correction.
@@ -254,7 +322,7 @@ def make_dataset_pairs_baseline_vs_many(
 def compute_paired_wilcoxon_results(
     df_runs: pd.DataFrame,
     metric: str,
-    seed_col: str = "random_seed",
+    replicate_col: str = "random_seed",
     group_cols=("n_features", "odds_ratio", "control_frequency"),
     model_col: str = "model_type",
     pnet_label: str = "pnet",
@@ -277,18 +345,18 @@ def compute_paired_wilcoxon_results(
     Assumes df_runs contains one row per run and includes columns:
       - model_col
       - group_cols
-      - seed_col
+      - replicate_col
       - metric
     """
 
     # Filter rows with valid metric (mask-based to avoid pandas overload issues)
-    keep_cols = list(group_cols) + [seed_col, model_col, metric]
+    keep_cols = list(group_cols) + [replicate_col, model_col, metric]
     mask = df_runs[metric].notna()
     d = df_runs.loc[mask, keep_cols].copy()
 
     # Wide format: index = group + seed, columns = model
     wide = d.pivot_table(
-        index=list(group_cols) + [seed_col],
+        index=list(group_cols) + [replicate_col],
         columns=model_col,
         values=metric,
         aggfunc="mean",
@@ -376,7 +444,7 @@ def compute_paired_wilcoxon_results(
 def compute_paired_model_wilcoxon_results(
     df_runs: pd.DataFrame,
     metric: str,
-    seed_col: str = "random_seed",
+    replicate_col: str = "random_seed",
     group_cols=["datasets"],
     model_col="model_type",
     model_pairs=None,
@@ -387,11 +455,18 @@ def compute_paired_model_wilcoxon_results(
     fdr_groupby_cols=None,
     q_col: str = "q_fdr_bh",
 ):
-    """Wrapper around the compute_paired_dataset_wilcoxon results to make it work for the model-model comparisons as well"""
+    """
+    Wrapper around the compute_paired_dataset_wilcoxon results to make it work for the model-model comparisons as well
+
+    Changes vs base:
+      - dataset_col=model_col
+      - renames dataset_a/b -> model_a/b
+      - renames mean_dataset_a/b_<metric> -> mean_model_a/b_<metric>
+    """
     out = compute_paired_dataset_wilcoxon_results(
         df_runs=df_runs,
         metric=metric,
-        seed_col=seed_col,
+        replicate_col=replicate_col,
         group_cols=group_cols,
         dataset_col=model_col,  # this is the key difference
         dataset_pairs=model_pairs,
@@ -401,9 +476,17 @@ def compute_paired_model_wilcoxon_results(
         fdr_correction=fdr_correction,
         fdr_groupby_cols=fdr_groupby_cols,
         q_col=q_col,
-        require_matching_seeds=True,
+        require_matching_replicates=True,
     )
-    out.rename(columns={"dataset_a": "model_a", "dataset_b": "model_b"}, inplace=True)
+    out.rename(
+        columns={
+            "dataset_a": "model_a",
+            "dataset_b": "model_b",
+            f"mean_dataset_a_{metric}": f"mean_model_a_{metric}",
+            f"mean_dataset_b_{metric}": f"mean_model_b_{metric}",
+        },
+        inplace=True,
+    )
 
     return out
 
@@ -411,7 +494,7 @@ def compute_paired_model_wilcoxon_results(
 def compute_paired_dataset_wilcoxon_results(
     df_runs: pd.DataFrame,
     metric: str,
-    seed_col: str = "random_seed",
+    replicate_col: str = "random_seed",
     group_cols=(),
     dataset_col: str = "datasets",
     dataset_pairs=None,
@@ -421,13 +504,14 @@ def compute_paired_dataset_wilcoxon_results(
     fdr_correction: bool = False,
     fdr_groupby_cols=None,
     q_col: str = "q_fdr_bh",
-    require_matching_seeds: bool = True,
+    require_matching_replicates: bool = True,
+    include_replicate_col_name: bool = True,
 ):
     """
     Paired dataset-dataset comparisons using the Wilcoxon signed-rank test.
 
     This function compares a metric across dataset pairs using paired differences
-    within replicate runs (paired by seed_col). Optional grouping variables
+    within replicate runs (paired by replicate_col). Optional grouping variables
     (e.g., model_type) can be provided via group_cols to run separate paired tests
     within each group.
 
@@ -435,8 +519,8 @@ def compute_paired_dataset_wilcoxon_results(
     -----
     - There is no `model_col`. Treat model_type (or any other categorical splitter)
       as part of `group_cols`.
-    - If require_matching_seeds=True, the function enforces that for each group and
-      each dataset pair (a, b), the set of seeds present in dataset a equals the set
+    - If require_matching_replicates=True, the function enforces that for each group and
+      each dataset pair (a, b), the set of replicates (e.g., seeds) present in dataset a equals the set
       present in dataset b. This prevents accidental unpaired comparisons caused by
       missing runs in one dataset.
 
@@ -445,12 +529,12 @@ def compute_paired_dataset_wilcoxon_results(
     df_runs : pd.DataFrame
         Long-format table with columns:
           - group_cols (optional),
-          - seed_col,
+          - replicate_col,
           - dataset_col,
           - metric.
     metric : str
         Column name of the metric to compare (e.g., "test_avg_precision", "rank").
-    seed_col : str
+    replicate_col : str
         Pairing identifier column (e.g., "random_seed").
     group_cols : sequence
         Columns defining groups within which to run paired tests (e.g., ("model_type",)).
@@ -466,8 +550,8 @@ def compute_paired_dataset_wilcoxon_results(
         Columns to group by when performing BH-FDR correction. If None, applies globally.
     q_col : str
         Name of q-value column to add.
-    require_matching_seeds : bool
-        If True, enforce identical seed sets between dataset_a and dataset_b within each group.
+    require_matching_replicates : bool
+        If True, enforce identical replicate sets between dataset_a and dataset_b within each group.
     logger : logging.Logger or None
         Optional logger for debug/info messages.
 
@@ -480,7 +564,7 @@ def compute_paired_dataset_wilcoxon_results(
 
     # keep only rows with a defined metric
     mask = df_runs[metric].notna()
-    keep_cols = group_cols + [seed_col, dataset_col, metric]
+    keep_cols = group_cols + [replicate_col, dataset_col, metric]
     d = df_runs.loc[mask, keep_cols].copy()
 
     # Build a unified group key column so we never have to special-case group_cols=()
@@ -490,9 +574,9 @@ def compute_paired_dataset_wilcoxon_results(
     else:
         d["_group_key"] = [()] * len(d)
 
-    # Pivot to wide so each row is (group_key, seed) and columns are datasets.
+    # Pivot to wide so each row is (group_key, replicate) and columns are datasets.
     wide = d.pivot_table(
-        index=["_group_key", seed_col],
+        index=["_group_key", replicate_col],
         columns=dataset_col,
         values=metric,
         aggfunc="mean",
@@ -502,12 +586,12 @@ def compute_paired_dataset_wilcoxon_results(
     if dataset_pairs is None:
         dataset_pairs = all_unordered_pairs(wide.columns)
 
-    # Precompute seed sets for strict checking
-    seed_sets = None
-    if require_matching_seeds:
-        seed_sets = {}
+    # Precompute replicate sets for strict checking
+    replicate_sets = None
+    if require_matching_replicates:
+        replicate_sets = {}
         for (gkey, dset), g in d.groupby(["_group_key", dataset_col], sort=False):
-            seed_sets[(gkey, dset)] = set(g[seed_col].unique())
+            replicate_sets[(gkey, dset)] = set(g[replicate_col].unique())
 
     rows = []
     for a, b in dataset_pairs:
@@ -517,13 +601,13 @@ def compute_paired_dataset_wilcoxon_results(
 
         sub = (
             wide[[a, b]].dropna(how="any").reset_index()
-        )  # cols: _group_key, seed_col, a, b
+        )  # cols: _group_key, replicate_col, a, b
 
         for gkey, g in sub.groupby("_group_key", sort=False):
-            # Enforce seed set equality within this group, if requested
-            if require_matching_seeds:
-                set_a = seed_sets.get((gkey, a), set())
-                set_b = seed_sets.get((gkey, b), set())
+            # Enforce replicate set equality within this group, if requested
+            if require_matching_replicates:
+                set_a = replicate_sets.get((gkey, a), set())
+                set_b = replicate_sets.get((gkey, b), set())
                 if set_a != set_b:
                     missing_in_b = sorted(set_a - set_b)
                     missing_in_a = sorted(set_b - set_a)
@@ -532,9 +616,9 @@ def compute_paired_dataset_wilcoxon_results(
                         dict(zip(group_cols, gkey)) if group_cols else "(no groups)"
                     )
                     raise ValueError(
-                        f"Seed mismatch for datasets ({a} vs {b}) within group {group_desc}: "
-                        f"seeds in {a} but not {b}: {missing_in_b}; "
-                        f"seeds in {b} but not {a}: {missing_in_a}"
+                        f"replicate mismatch for datasets ({a} vs {b}) within group {group_desc}: "
+                        f"replicates in {a} but not {b}: {missing_in_b}; "
+                        f"replicates in {b} but not {a}: {missing_in_a}"
                     )
 
             diffs = g[a].to_numpy() - g[b].to_numpy()
@@ -570,6 +654,10 @@ def compute_paired_dataset_wilcoxon_results(
             rows.append(row)
 
     out = pd.DataFrame(rows)
+
+    if include_replicate_col_name and len(out):
+        out.insert(0, "replicate_col", replicate_col)
+
     if fdr_correction and len(out):
         out = add_fdr_bh_qvals(
             out, p_col="p_wilcoxon", q_col=q_col, groupby_cols=fdr_groupby_cols
@@ -580,7 +668,7 @@ def compute_paired_dataset_wilcoxon_results(
 def compute_paired_perm_results(
     df_runs: pd.DataFrame,
     metric: str,
-    seed_col: str = "random_seed",
+    replicate_col: str = "random_seed",
     group_cols=("n_features", "odds_ratio", "control_frequency"),
     model_col: str = "model_type",
     pnet_label: str = "pnet",
@@ -597,17 +685,17 @@ def compute_paired_perm_results(
     Assumes df_runs contains one row per run and includes:
       - model_col
       - group_cols
-      - seed_col
+      - replicate_col
       - metric
     """
-    keep_cols = list(group_cols) + [seed_col, model_col, metric]
+    keep_cols = list(group_cols) + [replicate_col, model_col, metric]
 
     mask = df_runs[metric].notna()
     d = df_runs.loc[mask, keep_cols].copy()
 
-    # Wide: index=(group_cols + seed), columns=model, values=metric
+    # Wide: index=(group_cols + replicate), columns=model, values=metric
     wide = d.pivot_table(
-        index=list(group_cols) + [seed_col],
+        index=list(group_cols) + [replicate_col],
         columns=model_col,
         values=metric,
         aggfunc="mean",
@@ -639,8 +727,8 @@ def compute_paired_perm_results(
         base_df = base_vals.reset_index().rename(columns={baseline: "base_val"})
 
         merged = diffs_df.merge(
-            pnet_df, on=list(group_cols) + [seed_col], how="left"
-        ).merge(base_df, on=list(group_cols) + [seed_col], how="left")
+            pnet_df, on=list(group_cols) + [replicate_col], how="left"
+        ).merge(base_df, on=list(group_cols) + [replicate_col], how="left")
 
         for keys, sub in merged.groupby(list(group_cols), sort=False):
             diffs_vec = sub["diff"].to_numpy()
@@ -709,7 +797,7 @@ def compute_paired_perm_results(
 # df_perm_test2 = compute_paired_perm_results(
 #     df_runs=df_fake2,
 #     metric="train_avg_precision",
-#     seed_col="random_seed",
+#     replicate_col="random_seed",
 #     group_cols=("n_features", "odds_ratio", "control_frequency"),
 #     model_col="model_type",
 #     pnet_label="P-NET",
@@ -721,3 +809,220 @@ def compute_paired_perm_results(
 # )
 
 # df_perm_test2
+
+
+####################################
+# Revision 2
+####################################
+
+
+def patient_bootstrap_cis_streaming(
+    preds_long: pd.DataFrame,
+    model_pairs: list[tuple[str, str]],
+    dataset_pairs: list[tuple[str, str]],
+    n_boot: int = 10_000,
+    alpha: float = 0.05,
+    random_state: int = 0,
+    split_col: str = "split_id",
+    dataset_col: str = "datasets",
+    model_col: str = "model_type",
+    id_col: str = "sample_id",
+    y_col: str = "y_true",
+    p_col: str = "y_proba",
+) -> tuple[
+    pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame
+]:
+    """
+    Patient-level bootstrap CIs (percentile) per split, streaming over splits.
+
+    Returns:
+      P1: per-split AUPRC CI table
+      P2: per-split model-model ΔAUPRC CI table
+      P3: per-split dataset-dataset ΔAUPRC CI table
+      S1: CI-width summary across splits for AUPRC
+      S2: CI-width summary across splits for model-model ΔAUPRC
+      S3: CI-width summary across splits for dataset-dataset ΔAUPRC
+    """
+    need = {split_col, dataset_col, model_col, id_col, y_col, p_col}
+    miss = need - set(preds_long.columns)
+    if miss:
+        raise ValueError(f"preds_long missing columns: {sorted(miss)}")
+
+    df = preds_long.copy()
+    df[split_col] = df[split_col].astype(int)
+    df[id_col] = df[id_col].astype(str)
+
+    rng = np.random.default_rng(random_state)
+
+    p1_rows: list[dict] = []
+    p2_rows: list[dict] = []
+    p3_rows: list[dict] = []
+
+    for split_id in tqdm(
+        sorted(df[split_col].unique().tolist()),
+        desc="Patient bootstrap (splits)",
+        unit="split",
+    ):
+        logger.info(f"Working on split_id={split_id}...")
+        df_s = df[df[split_col] == split_id]
+        if df_s.empty:
+            continue
+
+        # Canonical patient ordering for this split
+        (_, _), g0 = next(iter(df_s.groupby([dataset_col, model_col], sort=False)))
+        P = sorted(g0[id_col].unique().tolist())
+        n_test = len(P)
+        if n_test == 0:
+            continue
+
+        boot_idx = _bootstrap_indices(n=n_test, n_boot=n_boot, rng=rng)
+
+        g0i = g0.set_index(id_col).reindex(P)
+        y_full = g0i[y_col].to_numpy(dtype=int)
+
+        boot_map: dict[tuple[str, str], np.ndarray] = {}
+        point_map: dict[tuple[str, str], float] = {}
+
+        # --- AUPRC per (dataset, model) ---
+        logger.info(f"Calculating AUPRC for each dataset x model combination...")
+        for (dset, model), g in df_s.groupby([dataset_col, model_col], sort=False):
+            gi = g.set_index(id_col).reindex(P)
+
+            # minimal safety: y_true must match
+            y_here = gi[y_col].to_numpy(dtype=int)
+            if not np.array_equal(y_here, y_full):
+                raise ValueError(
+                    f"y_true mismatch in split_id={split_id} for (datasets={dset}, model={model})."
+                )
+
+            p_full = gi[p_col].to_numpy(dtype=float)
+
+            point = average_precision_score(y_full, p_full)
+            point_map[(dset, model)] = point
+
+            boot = np.empty(n_boot, dtype=float)
+            for b in range(n_boot):
+                sel = boot_idx[b]
+                boot[b] = average_precision_score(y_full[sel], p_full[sel])
+
+            boot_map[(dset, model)] = boot
+
+            ci_low, ci_high = _percentile_ci(boot, alpha=alpha)
+            p1_rows.append(
+                dict(
+                    datasets=dset,
+                    model_type=model,
+                    split_id=int(split_id),
+                    test_avg_precision=float(point),
+                    ci_low=ci_low,
+                    ci_high=ci_high,
+                    ci_width=ci_high - ci_low,
+                    n_test=int(n_test),
+                    n_boot=int(n_boot),
+                )
+            )
+
+        # --- model-model deltas within dataset ---
+        logger.info(
+            f"Calculating model-model deltas within dataset (deltaAUPRC for each model pair x dataset)..."
+        )
+        for dset in sorted(df_s[dataset_col].unique().tolist()):
+            for model_a, model_b in model_pairs:
+                ka = (dset, model_a)
+                kb = (dset, model_b)
+                if ka not in boot_map or kb not in boot_map:
+                    continue
+
+                delta_boot = boot_map[ka] - boot_map[kb]
+                ci_low, ci_high = _percentile_ci(delta_boot, alpha=alpha)
+                delta_point = point_map[ka] - point_map[kb]
+
+                p2_rows.append(
+                    dict(
+                        datasets=dset,
+                        model_a=model_a,
+                        model_b=model_b,
+                        split_id=int(split_id),
+                        delta_test_avg_precision=float(delta_point),
+                        ci_low=ci_low,
+                        ci_high=ci_high,
+                        ci_width=ci_high - ci_low,
+                        prop_delta_gt_zero=float(np.mean(delta_boot > 0)),
+                        n_test=int(n_test),
+                        n_boot=int(n_boot),
+                    )
+                )
+
+        # --- dataset-dataset deltas within model ---
+        logger.info(
+            f"Calculating dataset-dataset deltas within dataset (deltaAUPRC for each model pair x dataset)..."
+        )
+        for model in sorted(df_s[model_col].unique().tolist()):
+            for d1, d2 in dataset_pairs:
+                k1 = (d1, model)
+                k2 = (d2, model)
+                if k1 not in boot_map or k2 not in boot_map:
+                    continue
+
+                delta_boot = boot_map[k1] - boot_map[k2]
+                ci_low, ci_high = _percentile_ci(delta_boot, alpha=alpha)
+                delta_point = point_map[k1] - point_map[k2]
+
+                p3_rows.append(
+                    dict(
+                        model_type=model,
+                        dataset_a=d1,
+                        dataset_b=d2,
+                        split_id=int(split_id),
+                        delta_test_avg_precision=float(delta_point),
+                        ci_low=ci_low,
+                        ci_high=ci_high,
+                        ci_width=ci_high - ci_low,
+                        prop_delta_gt_zero=float(np.mean(delta_boot > 0)),
+                        n_test=int(n_test),
+                        n_boot=int(n_boot),
+                    )
+                )
+
+        del boot_idx, boot_map, point_map
+
+    df_p1 = pd.DataFrame(p1_rows)
+    df_p2 = pd.DataFrame(p2_rows)
+    df_p3 = pd.DataFrame(p3_rows)
+
+    # --- S1: AUPRC ---
+    s1_width = _ciwidth_summary(df_p1, ["datasets", "model_type"])
+    s1_point = _point_estimate_summary(
+        df_p1,
+        group_cols=["datasets", "model_type"],
+        point_col="test_avg_precision",
+        out_prefix="test_avg_precision",
+    )
+
+    df_s1 = s1_point.merge(s1_width, on=["datasets", "model_type"], how="inner")
+
+    # --- S2: model-model delta ---
+    s2_width = _ciwidth_summary(df_p2, ["datasets", "model_a", "model_b"])
+    s2_point = _point_estimate_summary(
+        df_p2,
+        group_cols=["datasets", "model_a", "model_b"],
+        point_col="delta_test_avg_precision",
+        out_prefix="delta_test_avg_precision",
+    )
+
+    df_s2 = s2_point.merge(s2_width, on=["datasets", "model_a", "model_b"], how="inner")
+
+    # --- S3: dataset-dataset delta ---
+    s3_width = _ciwidth_summary(df_p3, ["model_type", "dataset_a", "dataset_b"])
+    s3_point = _point_estimate_summary(
+        df_p3,
+        group_cols=["model_type", "dataset_a", "dataset_b"],
+        point_col="delta_test_avg_precision",
+        out_prefix="delta_test_avg_precision",
+    )
+
+    df_s3 = s3_point.merge(
+        s3_width, on=["model_type", "dataset_a", "dataset_b"], how="inner"
+    )
+
+    return df_p1, df_p2, df_p3, df_s1, df_s2, df_s3

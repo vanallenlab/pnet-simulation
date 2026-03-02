@@ -49,4 +49,5 @@ SUPPLEMENTARY_FIGURE_DIR = FIGURE_DIR / "supplementary_figures"
 SUPPLEMENTARY_TABLES_DIR = RESULT_DIR / "supplementary_tables"
 
 # Reviewer requests
+FIGURE_REVIEWER_DIR = FIGURE_DIR / "reviewer_requests"
 RESULT_REVIEWER_DIR = RESULT_DIR / "reviewer_requests"
