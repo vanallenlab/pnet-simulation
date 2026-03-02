@@ -1,9 +1,12 @@
 import logging
 import os
+import pickle
 
 import configargparse
+import numpy as np
 import pandas as pd
 import yaml
+from sklearn.model_selection import StratifiedKFold
 
 import wandb
 from pnet import Pnet, model_selection, report_and_eval
@@ -38,8 +41,35 @@ def read_config(filename):
     return config
 
 
+def make_stratified_folds(indices, y, n_splits, shuffle, seed):
+    """
+    indices: 1D array/list of sample indices to split
+    y: 1D array of labels aligned to full dataset row order
+    returns: list of (train_idx, val_idx) arrays (original index space)
+    """
+    indices = np.asarray(indices)
+    y = np.asarray(y).reshape(-1)
+
+    skf = StratifiedKFold(
+        n_splits=n_splits,
+        shuffle=shuffle,
+        random_state=seed if shuffle else None,
+    )
+
+    folds = []
+    y_subset = y[indices]
+    for train_pos, val_pos in skf.split(np.zeros(len(indices)), y_subset):
+        train_idx = indices[train_pos]
+        val_idx = indices[val_pos]
+        folds.append((train_idx, val_idx))
+    return folds
+
+
 def get_train_val_test_indices(
-    split_dir, train_ind_f="training_set.csv", validation_ind_f="validation_set.csv", test_ind_f="test_set.csv"
+    split_dir,
+    train_ind_f="training_set.csv",
+    validation_ind_f="validation_set.csv",
+    test_ind_f="test_set.csv",
 ):
     """
     Load train, validation, and test indices from CSV files in the specified directory.
@@ -49,7 +79,9 @@ def get_train_val_test_indices(
         os.path.join(split_dir, train_ind_f), usecols=["id", "response"], index_col="id"
     ).index.tolist()
     validation_inds = pd.read_csv(
-        os.path.join(split_dir, validation_ind_f), usecols=["id", "response"], index_col="id"
+        os.path.join(split_dir, validation_ind_f),
+        usecols=["id", "response"],
+        index_col="id",
     ).index.tolist()
     test_inds = pd.read_csv(
         os.path.join(split_dir, test_ind_f), usecols=["id", "response"], index_col="id"
@@ -62,23 +94,75 @@ def get_train_eval_indices(split_dir, eval_set):
     train_f = os.path.join(split_dir, "training_set.csv")
     eval_f = os.path.join(split_dir, f"{eval_set}_set.csv")
 
-    train_ids = pd.read_csv(train_f, usecols=["id", "response"], index_col="id").index.tolist()
-    eval_ids = pd.read_csv(eval_f, usecols=["id", "response"], index_col="id").index.tolist()
+    train_ids = pd.read_csv(
+        train_f, usecols=["id", "response"], index_col="id"
+    ).index.tolist()
+    eval_ids = pd.read_csv(
+        eval_f, usecols=["id", "response"], index_col="id"
+    ).index.tolist()
 
     return train_ids, eval_ids, train_f, eval_f
 
 
-def setup_save_dir(model_type, eval_set, wandb_group, run_id, base_dir="../results"):
+def get_train_val_test_indices_from_pickle(splits_path: str, split_id: int):
+    """
+    Load explicit train/val/test sample IDs from a repeated-splits pickle.
+
+    Expected structure:
+      obj = {"splits": [{"split_id": int, "train_ids": [...], "val_ids": [...], "test_ids": [...]}, ...]}
+
+    Returns:
+      train_inds, validation_inds, test_inds (lists of sample IDs)
+    """
+    if splits_path is None:
+        raise ValueError("splits_path is None")
+    if split_id is None:
+        raise ValueError("split_id must be provided when splits_path is set")
+
+    with open(splits_path, "rb") as f:
+        obj = pickle.load(f)
+
+    splits = obj["splits"]
+    # find the requested split
+    match = None
+    for s in splits:
+        if int(s.get("split_id", -1)) == int(split_id):
+            match = s
+            break
+    if match is None:
+        raise ValueError(f"split_id={split_id} not found in {splits_path}")
+
+    train_inds = list(match["train_ids"])
+    validation_inds = list(match["val_ids"])
+    test_inds = list(match["test_ids"])
+    return train_inds, validation_inds, test_inds
+
+
+def setup_save_dir(
+    model_type,
+    eval_set,
+    wandb_group,
+    run_id,
+    base_dir="/mnt/disks/gmiller_data1/pnet-simu-private/results",  # TODO: refactor hardcoding
+):
     base = os.path.join(base_dir, f"{model_type}_eval_set_{eval_set}/wandbID_{run_id}")
     if wandb_group:
-        base = os.path.join(base_dir, f"{wandb_group}/{model_type}_eval_set_{eval_set}/wandbID_{run_id}")
-    report_and_eval.make_dir_if_needed(base)
+        base = os.path.join(
+            base_dir, f"{wandb_group}/{model_type}_eval_set_{eval_set}/wandbID_{run_id}"
+        )
     logger.debug(f"Save directory: {base}")
+    report_and_eval.make_dir_if_needed(base)
     return base
 
 
 # def train_model_rf(train_dataset, min_samples_split, max_depth=None, random_seed=None, min_samples_leaf=1):
-def train_model_rf(train_dataset, min_samples_split=None, max_depth=None, min_samples_leaf=1, random_seed=None):
+def train_model_rf(
+    train_dataset,
+    min_samples_split=None,
+    max_depth=None,
+    min_samples_leaf=1,
+    random_seed=None,
+):
     logger.info("Training Random Forest model")
     x_train, y_train = train_dataset.x, train_dataset.y.ravel()
 
@@ -112,8 +196,54 @@ def train_model_bdt(train_dataset, test_dataset, evaluation_set):
         xlabel="Boosting iterations",
     )
     wandb.log({"convergence plot": plt})
-    report_and_eval.savefig(plt, os.path.join(wandb.run.dir, "deviance_per_boosting_iteration"))
+    report_and_eval.savefig(
+        plt, os.path.join(wandb.run.dir, "deviance_per_boosting_iteration")
+    )
     return model, train_scores, test_scores
+
+
+def train_model_logistic_regression(
+    train_dataset,
+    penalty="l2",
+    C=1.0,
+    l1_ratio=None,
+    random_seed=None,
+):
+    x_train, y_train = train_dataset.x, train_dataset.y.ravel()
+
+    model = model_selection.run_logistic_regression(
+        x_train,
+        y_train,
+        penalty=penalty,
+        C=C,
+        l1_ratio=l1_ratio,
+        random_seed=random_seed,
+    )
+    return model
+
+
+def train_model_SGD_logistic_regression(
+    train_dataset,
+    loss="log_loss",
+    penalty="l2",
+    C=1.0,
+    l1_ratio=None,
+    class_weight=None,
+    random_seed=None,
+):
+    x_train, y_train = train_dataset.x, train_dataset.y.ravel()
+
+    model = model_selection.run_logistic_regression_sgd(
+        x_train,
+        y_train,
+        loss=loss,
+        penalty=penalty,
+        C=C,
+        l1_ratio=l1_ratio,
+        class_weight=class_weight,
+        random_seed=random_seed,
+    )
+    return model
 
 
 def train_model_pnet(hparams, genetic_data, additional, y):
@@ -132,29 +262,52 @@ def train_model_pnet(hparams, genetic_data, additional, y):
         epochs=hparams["epochs"],
         verbose=hparams["verbose"],
         early_stopping=hparams["early_stopping"],
+        early_stopping_patience=hparams.get("early_stopping_patience", 50),
         train_inds=hparams["train_set_indices"],
         test_inds=hparams["evaluation_set_indices"],
+        loss_weight=hparams.get("loss_weight", None),
     )
 
     logger.info("Logging loss curve")
-    plt = report_and_eval.get_loss_plot(train_losses=train_losses, test_losses=test_losses)
+    plt = report_and_eval.get_loss_plot(
+        train_losses=train_losses, test_losses=test_losses
+    )
     wandb.log({"convergence plot": plt})
     report_and_eval.savefig(plt, os.path.join(hparams["save_dir"], "loss_over_time"))
 
-    return model, train_losses, test_losses, train_dataset, test_dataset, model_save_path
+    return (
+        model,
+        train_losses,
+        test_losses,
+        train_dataset,
+        test_dataset,
+        model_save_path,
+    )
 
 
-def evaluate_and_log_results(model, train_dataset, test_dataset, model_type, save_dir, eval_set_name):
+def evaluate_and_log_results(
+    model, train_dataset, test_dataset, model_type, save_dir, eval_set_name
+):
     logger.info("Evaluating model on training and evaluation sets")
     report_and_eval.evaluate_interpret_save(
-        model=model, pnet_dataset=train_dataset, model_type=model_type, who="train", save_dir=save_dir
+        model=model,
+        pnet_dataset=train_dataset,
+        model_type=model_type,
+        who="train",
+        save_dir=save_dir,
     )
     report_and_eval.evaluate_interpret_save(
-        model=model, pnet_dataset=test_dataset, model_type=model_type, who=eval_set_name, save_dir=save_dir
+        model=model,
+        pnet_dataset=test_dataset,
+        model_type=model_type,
+        who=eval_set_name,
+        save_dir=save_dir,
     )
 
 
-def evaluate_on_train_val_test(model, train_dset, val_dset, test_dset, hparams):
+def evaluate_on_train_val_test(
+    model, train_dset, val_dset, test_dset, hparams, log_to_wandb=True
+):
     """
     Evaluate a trained model on train, val, and test splits using PnetDataset.
 
@@ -165,7 +318,9 @@ def evaluate_on_train_val_test(model, train_dset, val_dset, test_dset, hparams):
         train_dset, val_dset, test_dset: PnetDataset objects for train, validation, and test sets
         hparams: Dict of hyperparameters including model_type and save_dir
     """
-    for split_name, split_dset in zip(["train", "validation", "test"], [train_dset, val_dset, test_dset]):
+    for split_name, split_dset in zip(
+        ["train", "validation", "test"], [train_dset, val_dset, test_dset]
+    ):
         logger.info(f"Evaluating model on {split_name} set")
 
         report_and_eval.evaluate_interpret_save(
@@ -174,6 +329,7 @@ def evaluate_on_train_val_test(model, train_dset, val_dset, test_dset, hparams):
             model_type=hparams["model_type"],
             who=split_name,
             save_dir=hparams["save_dir"],
+            log_to_wandb=log_to_wandb,
         )
     return
 

@@ -6,18 +6,13 @@ parameters:
     value: /mnt/disks/gmiller_data1/pnet-simu-private/configs/data.yaml
   datasets:
     values:
-    - somatic_amp somatic_del somatic_mut
     - germline_rare_lof
-    - germline_rare_common_missense
+    - germline_rare_common_missense # aka rare_missense since no common
     - germline_rare_lof_missense
-    - germline_common_lof_missense
+    - somatic_amp somatic_del somatic_mut
     - somatic_amp somatic_del somatic_mut germline_rare_lof
-    - germline_rare_common_lof_missense
-    - somatic_amp somatic_del somatic_mut germline_rare_common_lof_missense
     - somatic_amp somatic_del somatic_mut germline_rare_lof_missense
-    - somatic_amp somatic_del somatic_mut germline_common_lof_missense
-    # - somatic_amp somatic_del somatic_mut germline_rare_common_lof # removing: no common LOF variants, so this is a duplicate of somatic plus germline_rare_lof
-    - somatic_amp somatic_del somatic_mut germline_rare_common_missense
+    - somatic_amp somatic_del somatic_mut germline_rare_common_missense # aka somatic + rare_missense since no common
   evaluation_set:
     values:
     - validation
@@ -32,10 +27,12 @@ parameters:
     - pnet
     - rf
   seed:
-    values: [789, 999, 101, 7, 88]
-    # values: [123, 42, 155, 23, 356, 789, 999, 101, 7, 88]
+    value: 123
   wandb_group:
-    value: reviewers_p1000_pnet_rf_add_5_seeds
-    # value: pnet_somatic_and_germline_exp_004
+    value: revision2_10x_splits_p1000
+  splits_path:
+    value: /mnt/disks/gmiller_data1/pnet-simu-private/data/pnet_database/prostate/splits/splits_10x_train759_val89_test95_seed123.pkl
+  split_id:
+    values: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 program: /mnt/disks/gmiller_data1/pnet-simu-private/src/pipelines/run_model_on_preharmonized_data.py
 project: prostate_met_status

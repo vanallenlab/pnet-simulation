@@ -4,6 +4,7 @@
 import logging
 import os
 import re
+import warnings
 
 import configargparse
 import pandas as pd
@@ -12,6 +13,9 @@ import torch
 import wandb
 from pnet import Pnet, pnet_loader, report_and_eval
 from pnet.utils import modeling_utils
+
+warnings.simplefilter(action="ignore", category=FutureWarning)
+
 
 logging.basicConfig(
     encoding="utf-8",
@@ -26,8 +30,20 @@ logger = logging.getLogger(__name__)
 
 def parse_arguments():
     parser = configargparse.ArgumentParser(description="Description of your script")
-    parser.add("--config_f", type=str, required=False, is_config_file=True, help="Path to a config file")
-    parser.add("--data_config_f", type=str, required=True, is_config_file=False, help="Path to a config file")
+    parser.add(
+        "--config_f",
+        type=str,
+        required=False,
+        is_config_file=True,
+        help="Path to a config file",
+    )
+    parser.add(
+        "--data_config_f",
+        type=str,
+        required=True,
+        is_config_file=False,
+        help="Path to a config file",
+    )
     parser.add(
         "--perturbed_data_config_f",
         type=str,
@@ -47,14 +63,21 @@ def parse_arguments():
         choices=["validation", "test"],
         help="Evaluation set (validation or test)",
     )
-    parser.add("--model_type", default="bdt", choices=["bdt", "rf", "pnet"], help="Type of model")
+    parser.add(
+        "--model_type",
+        default="bdt",
+        choices=["bdt", "rf", "pnet", "logistic_regression"],
+        help="Type of model",
+    )
     parser.add("--wandb_group", default="", help="Wandb group name")
-    parser.add("--wandb_project", default="prostate_met_status", help="Wandb group name")
+    parser.add(
+        "--wandb_project", default="prostate_met_status", help="Wandb group name"
+    )
     parser.add("--seed", type=int, default=123, help="Seed value")
     parser.add("--input_data_dir", help="Directory with model-ready data")
     parser.add(
-        "--data_split_dir",
-        default="../../pnet_germline/data/pnet_database/prostate/splits",
+        "--data_split_dir",  # TODO: remove hard-coded default path
+        default="/mnt/disks/gmiller_data1/pnet_germline/data/pnet_database/prostate/splits",
         help="Directory with data split files",
     )
     parser.add(
@@ -64,7 +87,10 @@ def parse_arguments():
     )
     # parser.add('--genetic_data', type=yaml.load, help="TODO: dictionary-style yaml")
     parser.add(
-        "--cpus", type=int, required=False, help="Define the number of CPUs PyTorch uses during parallelization tasks"
+        "--cpus",
+        type=int,
+        required=False,
+        help="Define the number of CPUs PyTorch uses during parallelization tasks",
     )
     parser.add(
         "--min_samples_split",
@@ -73,7 +99,10 @@ def parse_arguments():
         help="Define the min number of samples used to make RF split (best practice usually 5-10% of dataset)",
     )
     parser.add(
-        "--input_dropout", default=0.5, type=float, help="Proportion of dropout between the input layer and gene layer"
+        "--input_dropout",
+        default=0.5,
+        type=float,
+        help="Proportion of dropout between the input layer and gene layer",
     )
     parser.add(
         "--h1_alpha",
@@ -100,7 +129,12 @@ def parse_arguments():
         default=500,
         help="Number of epochs to train the model (default: 500)",
     )
-    parser.add("--perturbed_data_dir", type=str, default=None, help="Path to perturbed data directory")
+    parser.add(
+        "--perturbed_data_dir",
+        type=str,
+        default=None,
+        help="Path to perturbed data directory",
+    )
     parser.add(
         "--perturbed_data_wandb_id",
         type=str,
@@ -125,11 +159,35 @@ def parse_arguments():
         default=1,
         help="Minimum number of samples required to be at a leaf node for Random Forest (default: 1)",
     )
-
+    parser.add(
+        "--l1_penalty",
+        type=float,
+        default=1.0,
+        help="Inverse of regularization strength for logistic regression (C parameter). Lower values indicate stronger regularization. Only applies to logistic_regression model type (default: 1.0)",
+    )
+    parser.add(
+        "--logistic_penalty_type",
+        type=str,
+        default="l1",
+        choices=["l1", "l2", "elasticnet"],
+        help="Type of penalty for logistic regression: 'l1' (Lasso), 'l2' (Ridge), or 'elasticnet' (combination). Only applies to logistic_regression model type (default: l1)",
+    )
+    parser.add(
+        "--logistic_l1_ratio",
+        type=float,
+        default=0.5,
+        help="Balance between L1 and L2 regularization when using elasticnet penalty (0 to 1). 0 = pure L2, 1 = pure L1. Only applies to logistic_regression model type (default: 0.5)",
+    )
     return parser.parse_args()
 
 
-def load_input_data(config, input_dir, perturbed_data_dir=None, perturbed_target=None, perturbed_somatic_mut=None):
+def load_input_data(
+    config,
+    input_dir,
+    perturbed_data_dir=None,
+    perturbed_target=None,
+    perturbed_somatic_mut=None,
+):
     """Load genetic, confounder, and target data from disk, with optional overrides for perturbation testing."""
     genetic_data = {}
     for name, info in config["genetic_data"].items():
@@ -141,7 +199,9 @@ def load_input_data(config, input_dir, perturbed_data_dir=None, perturbed_target
             logger.debug(f"Using default {name}: {path}")
         genetic_data[name] = pd.read_csv(path, index_col=0)
 
-    confounder_df = pd.read_csv(os.path.join(input_dir, config["confounder_data"]["filename"]), index_col=0)
+    confounder_df = pd.read_csv(
+        os.path.join(input_dir, config["confounder_data"]["filename"]), index_col=0
+    )
 
     if perturbed_target:
         target_path = os.path.join(perturbed_data_dir, perturbed_target)
@@ -172,12 +232,16 @@ def main():
     if args.perturbed_data_config_f:
         perturbed_data_config = modeling_utils.read_config(args.perturbed_data_config_f)
         logger.debug(f"Loaded perturbed data config: {perturbed_data_config}")
-        args.perturbed_somatic_mut = perturbed_data_config["perturbed_somatic_mut"][args.perturbation_suffix][
-            "data_file"
-        ]
-        args.perturbed_target = perturbed_data_config["perturbed_somatic_mut"][args.perturbation_suffix]["target_file"]
+        args.perturbed_somatic_mut = perturbed_data_config["perturbed_somatic_mut"][
+            args.perturbation_suffix
+        ]["data_file"]
+        args.perturbed_target = perturbed_data_config["perturbed_somatic_mut"][
+            args.perturbation_suffix
+        ]["target_file"]
     else:
-        logger.warning("No perturbed data config file provided. Falling back to normal data.")
+        logger.warning(
+            "No perturbed data config file provided. Falling back to normal data."
+        )
 
     genetic_data, confounder_df, y = load_input_data(
         config,
@@ -192,19 +256,25 @@ def main():
 
     # Load splits
     # train_inds, eval_inds, train_f, eval_f = get_train_eval_indices(args.data_split_dir, args.evaluation_set)
-    train_inds, validation_inds, test_inds = modeling_utils.get_train_val_test_indices(args.data_split_dir)
+    train_inds, validation_inds, test_inds = modeling_utils.get_train_val_test_indices(
+        args.data_split_dir
+    )
     if args.evaluation_set == "validation":
         eval_inds = validation_inds
     elif args.evaluation_set == "test":
         eval_inds = test_inds
 
     # Setup save path
-    save_dir = modeling_utils.setup_save_dir(args.model_type, args.evaluation_set, args.wandb_group, wandb.run.id)
+    save_dir = modeling_utils.setup_save_dir(
+        args.model_type, args.evaluation_set, args.wandb_group, wandb.run.id
+    )
 
     # Log info
     logger.info(f"Training on datasets: {list(genetic_data.keys())}")
     report_and_eval.report_df_info_with_names(genetic_data, n=5)
-    report_and_eval.report_df_info_with_names({"confounders": confounder_df, "y": y}, n=5)
+    report_and_eval.report_df_info_with_names(
+        {"confounders": confounder_df, "y": y}, n=5
+    )
 
     # Build hparams
     hparams = {
@@ -218,6 +288,7 @@ def main():
         "weight_decay": 1e-3,
         "epochs": args.epochs,
         "early_stopping": True,
+        "early_stopping_patience": 50,
         "batch_size": 64,
         "verbose": True,
         "data_split_dir": args.data_split_dir,
@@ -240,7 +311,9 @@ def main():
         hparams["perturbed_target"] = args.perturbed_target
         hparams["perturbed_somatic_mut"] = args.perturbed_somatic_mut
         hparams["perturbation_suffix"] = args.perturbation_suffix
-        hparams["wandb.run.id_that_created_perturbed_inputs"] = args.perturbed_data_wandb_id
+        hparams["wandb.run.id_that_created_perturbed_inputs"] = (
+            args.perturbed_data_wandb_id
+        )
 
         match = re.search(
             r"gene-(?P<gene>[A-Za-z0-9]+)_OR-(?P<odds_ratio>[0-9p]+)_ctrlFreq-(?P<control_freq>[0-9p]+)",
@@ -257,7 +330,9 @@ def main():
                 f"Parsed perturbation_suffix: gene={perturbed_gene}, odds_ratio={odds_ratio}, control_frequency={control_frequency}"
             )
         else:
-            logger.warning(f"Could not parse perturbation_suffix: {args.perturbation_suffix}")
+            logger.warning(
+                f"Could not parse perturbation_suffix: {args.perturbation_suffix}"
+            )
 
     # Adding hparams to wandb config
     wandb.config.update(hparams)
@@ -272,7 +347,7 @@ def main():
         gene_set=None,
         seed=args.seed,
     )
-    if args.model_type in ["rf", "bdt"]:
+    if args.model_type in ["rf", "bdt", "logistic_regression"]:
         train_dataset, validation_dataset = pnet_loader.generate_train_test(
             genetic_data,
             additional_data=confounder_df,
@@ -281,14 +356,20 @@ def main():
             test_inds=eval_inds,
             gene_set=None,
         )
-        # concatenate additional data to the input_df and x to match RF/BDT expectations
-        train_dataset.input_df = pd.concat([train_dataset.input_df, train_dataset.additional_data], axis=1)
+        # concatenate additional data to the input_df and x to match RF/BDT/logistic regression expectations
+        train_dataset.input_df = pd.concat(
+            [train_dataset.input_df, train_dataset.additional_data], axis=1
+        )
         train_dataset.x = torch.cat([train_dataset.x, train_dataset.additional], dim=1)
         validation_dataset.input_df = pd.concat(
             [validation_dataset.input_df, validation_dataset.additional_data], axis=1
         )
-        validation_dataset.x = torch.cat([validation_dataset.x, validation_dataset.additional], dim=1)
-        test_dataset.input_df = pd.concat([test_dataset.input_df, test_dataset.additional_data], axis=1)
+        validation_dataset.x = torch.cat(
+            [validation_dataset.x, validation_dataset.additional], dim=1
+        )
+        test_dataset.input_df = pd.concat(
+            [test_dataset.input_df, test_dataset.additional_data], axis=1
+        )
         test_dataset.x = torch.cat([test_dataset.x, test_dataset.additional], dim=1)
 
         if args.model_type == "rf":
@@ -299,17 +380,37 @@ def main():
                 random_seed=args.seed,
                 min_samples_leaf=args.min_samples_leaf,
             )
-        else:
-            model, _, _ = modeling_utils.train_model_bdt(train_dataset, validation_dataset, args.evaluation_set)
+        elif args.model_type == "bdt":
+            model, _, _ = modeling_utils.train_model_bdt(
+                train_dataset, validation_dataset, args.evaluation_set
+            )
+        elif args.model_type == "logistic_regression":
+            lr_params = {
+                "l1_penalty": args.l1_penalty,
+                "logistic_penalty_type": args.logistic_penalty_type,
+                "logistic_l1_ratio": args.logistic_l1_ratio,
+            }
+            wandb.config.update(lr_params)
+            model = modeling_utils.train_model_logistic_regression(
+                train_dataset,
+                penalty=args.logistic_penalty_type,
+                C=args.l1_penalty,
+                l1_ratio=args.logistic_l1_ratio
+                if args.logistic_penalty_type == "elasticnet"
+                else None,
+                random_seed=args.seed,
+            )
 
     elif args.model_type == "pnet":
-        model, _, _, train_dataset, validation_dataset, model_save_path = modeling_utils.train_model_pnet(
-            hparams, genetic_data, confounder_df, y
+        model, _, _, train_dataset, validation_dataset, model_save_path = (
+            modeling_utils.train_model_pnet(hparams, genetic_data, confounder_df, y)
         )
 
     # Evaluate and log results
     logger.info("Model training complete. Evaluating model...")
-    modeling_utils.evaluate_on_train_val_test(model, train_dataset, validation_dataset, test_dataset, hparams)
+    modeling_utils.evaluate_on_train_val_test(
+        model, train_dataset, validation_dataset, test_dataset, hparams
+    )
 
     # Clean up bulky pytorch model file if specified
     if args.model_type == "pnet":

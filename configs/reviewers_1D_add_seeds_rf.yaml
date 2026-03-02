@@ -89,12 +89,10 @@ parameters:
   perturbed_data_wandb_id:
     value: hvu4lf2q
   seed:
-    values:
-    - 123
-    - 42
-    - 155
+    values: [789, 999, 101, 7, 88]
+    # values: [123, 42, 155, 23, 356, 789, 999, 101, 7, 88]
   wandb_group:
-    value: single_gene_perturbation_003
+    value: reviewers_rf_1D
   wandb_project:
     value: prostate_met_status
 program: /mnt/disks/gmiller_data1/pnet-simu-private/src/pipelines/run_model_on_perturbed_data.py

@@ -1,0 +1,44 @@
+# 1D perturbed data logistic regression hyperparameter tuning
+# Parallel to RF tuning in paper: control_freq=0.1, n_features=10, OR in [1, 2, 10, 30]
+
+project: "prostate_met_status"
+
+program: /mnt/disks/gmiller_data1/pnet-simu-private/src/pipelines/run_model_on_perturbed_data.py
+method: grid
+parameters:
+  perturbation_suffix:
+    values:
+      - "gene-AR_OR-1_ctrlFreq-0p1_caseFreq-0p1_nFeatures-10"
+      - "gene-AR_OR-2_ctrlFreq-0p1_caseFreq-0p1818_nFeatures-10"
+      - "gene-AR_OR-10_ctrlFreq-0p1_caseFreq-0p5263_nFeatures-10"
+      - "gene-AR_OR-30_ctrlFreq-0p1_caseFreq-0p7692_nFeatures-10"
+  data_config_f:
+    value: "/mnt/disks/gmiller_data1/pnet/configs/data.yaml"
+  evaluation_set:
+    values: ["validation"]
+  model_type:
+    values: ["logistic_regression"]
+  logistic_penalty_type:
+    value: "l1"
+  l1_penalty:
+    values: [0.001, 0.01, 0.1, 1.0, 10.0]
+  wandb_group:
+    value: "hparam_tune_logistic_regression"
+  wandb_project:
+    value: "prostate_met_status"
+  seed:
+    values: [123]
+  datasets:
+    value: "somatic_mut"
+  input_data_wandb_id:
+    value: "u5yt90p1"
+  input_data_dir:
+    value: "/mnt/disks/gmiller_data1/pnet_germline/processed/wandb-group-data_prep_germline_tier12_and_somatic/converted-IDs-to-somatic_imputed-germline_True_imputed-somatic_False_paired-samples-True/wandb-run-id-u5yt90p1"
+  perturbed_data_config_f:
+    value: "/mnt/disks/gmiller_data1/pnet/configs/perturbed_data-somatic_mut-or_x_control_freqs.yaml"
+  perturbed_data_dir:
+    value: "/mnt/disks/gmiller_data1/pnet_germline/processed/perturbed_genotype_datasets/p1000_somatic_mut/wandb-run-id-hvu4lf2q"
+  perturbed_data_wandb_id:
+    value: "hvu4lf2q"
+  cpus:
+    value: 2

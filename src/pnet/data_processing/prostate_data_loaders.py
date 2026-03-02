@@ -3,7 +3,10 @@ import os
 
 import pandas as pd
 
-from pnet.data_processing import utils, data_manipulation  # for manipulating the germline VCFs, filtering, etc
+from pnet.data_processing import (
+    utils,
+    data_manipulation,
+)  # for manipulating the germline VCFs, filtering, etc
 
 
 logger = logging.getLogger(__name__)
@@ -65,15 +68,21 @@ def get_additional_data(
     ],
 ):
     logger.info("Getting additional data")
-    additional_df = load_additional_data(additional_f, id_map_f, cols_to_include=cols_to_include)
+    additional_df = load_additional_data(
+        additional_f, id_map_f, cols_to_include=cols_to_include
+    )
     return additional_df
 
 
-def get_target(id_map_f, sample_metadata_f, id_to_use="Tumor_Sample_Barcode", target_col="is_met"):
+def get_target(
+    id_map_f, sample_metadata_f, id_to_use="Tumor_Sample_Barcode", target_col="is_met"
+):
     """
     Get a DF of the target variable indexed by a sample ID.
     """
-    logger.info("Getting prediction target")  # TODO: alter to work when we aren't using paired samples
+    logger.info(
+        "Getting prediction target"
+    )  # TODO: alter to work when we aren't using paired samples
     sample_metadata = load_sample_metadata_and_target(id_map_f, sample_metadata_f)
     target = extract_target(sample_metadata, id_to_use=id_to_use, target_col="is_met")
     logger.info(f"Target column value_counts: {target[target_col].value_counts()}")
@@ -85,8 +94,12 @@ def get_indices_from_file(indices_f):
 
 
 def load_sample_metadata_and_target(id_map_f, sample_metadata_f):
-    logger.info("Loading the sample metadata DF that has all the IDs and also our target, metastatic status ('is_met')")
-    sample_metadata = load_sample_metadata_with_all_germline_ids(sample_metadata_f, id_map_f)
+    logger.info(
+        "Loading the sample metadata DF that has all the IDs and also our target, metastatic status ('is_met')"
+    )
+    sample_metadata = load_sample_metadata_with_all_germline_ids(
+        sample_metadata_f, id_map_f
+    )
     logger.debug(sample_metadata.head())
     logger.debug(sample_metadata.shape)
     return sample_metadata
@@ -96,7 +109,9 @@ def extract_target(df, id_to_use="Tumor_Sample_Barcode", target_col="is_met"):
     assert id_to_use in df.columns.tolist(), (
         "The ID you wanted to use isn't in the DF columns"
     )  # e.g. "Tumor_Sample_Barcode", "vcf_germline_ids"
-    logger.info(f"Generating the target DF (target column '{target_col}' indexed by '{id_to_use}')")
+    logger.info(
+        f"Generating the target DF (target column '{target_col}' indexed by '{id_to_use}')"
+    )
     target = df.set_index(id_to_use).loc[:, [target_col]]
     logger.debug(target.head())
     logger.debug(len(target))
@@ -165,7 +180,9 @@ def load_germline_metadata(
     metadata = pd.read_csv(metadata_f)
     # create binary "is_met_col" column
     metadata[is_met_col] = metadata[met_col].map({"Metastatic": 1, "Primary": 0})
-    metadata = metadata.rename(columns={id_col: "germline_id", met_col: "disease_status"})
+    metadata = metadata.rename(
+        columns={id_col: "germline_id", met_col: "disease_status"}
+    )
     logger.debug("Head of the metadata DF:")
     logger.debug(metadata.head())
     return metadata
@@ -218,7 +235,9 @@ def get_genes_in_common(
     # TODO: looks like there was an excel misshap! MAR1 has become 1-Mar, 10-Sept, etc. But I don't think these genes are covered by our datasets anyway...
     genes = pd.read_csv(tcga_gene_list_f)
     logger.debug(genes.head())
-    overlapping_genes = data_manipulation.find_overlapping_elements(set(genes["genes"]), overlapping_genes)
+    overlapping_genes = data_manipulation.find_overlapping_elements(
+        set(genes["genes"]), overlapping_genes
+    )
 
     return overlapping_genes
 
@@ -230,7 +249,9 @@ def restrict_to_genes_in_common(*datasets):
     - *datasets (Pandas DF): arbitrary number of DFs with format samples x genes/features
     """
     genes_in_common = get_genes_in_common(*datasets)
-    restricted_dataframes = data_manipulation.filter_to_specified_columns(genes_in_common, *datasets)
+    restricted_dataframes = data_manipulation.filter_to_specified_columns(
+        genes_in_common, *datasets
+    )
     return restricted_dataframes
 
 
@@ -242,7 +263,9 @@ def format_mutation_data(mut_df, mut_binary=True):
     """
     if mut_binary and not data_manipulation.is_binarized(mut_df):
         # if mut_binary and max(somatic_mut.nunique()) >= 2:
-        logger.info(f"Matrix was not binary. There were {max(mut_df.nunique())} unique values; binarizing now")
+        logger.info(
+            f"Matrix was not binary. There were {max(mut_df.nunique())} unique values; binarizing now"
+        )
         mut_df[mut_df > 1.0] = 1.0
     return mut_df
 
@@ -288,7 +311,9 @@ def harmonize_prostate_ids(
         )
 
     if convert_ids_to == "somatic":
-        logger.info("Converting germline IDs (vcf_germline_id) to somatic IDs (Tumor_Sample_Barcode)")
+        logger.info(
+            "Converting germline IDs (vcf_germline_id) to somatic IDs (Tumor_Sample_Barcode)"
+        )
         altered_germline_datasets = []
         for df in datasets_w_germline_ids:
             df.index = convert_germline_id_to_somatic_id(df.index.tolist())
@@ -297,7 +322,9 @@ def harmonize_prostate_ids(
         return altered_germline_datasets, datasets_w_somatic_ids
 
     elif convert_ids_to == "germline":
-        logger.info("Converting somatic IDs (Tumor_Sample_Barcode) to germline IDs (vcf_germline_id)")
+        logger.info(
+            "Converting somatic IDs (Tumor_Sample_Barcode) to germline IDs (vcf_germline_id)"
+        )
         altered_somatic_datasets = []
         for df in datasets_w_somatic_ids:
             df.index = convert_somatic_id_to_germline_id(df.index.tolist())
@@ -310,14 +337,20 @@ def harmonize_prostate_ids(
         return datasets_w_germline_ids, datasets_w_somatic_ids
 
 
-def convert_germline_id_to_somatic_id(germlineIDs, GERMLINE_DATADIR="../../../pnet_germline/data/"):
+def convert_germline_id_to_somatic_id(
+    germlineIDs, GERMLINE_DATADIR="../../../pnet_germline/data/"
+):
     """
     Convert list of germline IDs (vcf_germline_id) to somatic IDs (Tumor_Sample_Barcode).
     Warn if the converted list has any NAs: this means that a match wasn't found.
     """
     logger.debug("Loading the germline ID and somatic-germline ID mapping DF")
-    germline_somatic_id_map_f = os.path.join(GERMLINE_DATADIR, "prostate/germline_somatic_id_map_outer_join.csv")
-    germline_somatic_id_map = data_manipulation.load_df_verbose(germline_somatic_id_map_f)
+    germline_somatic_id_map_f = os.path.join(
+        GERMLINE_DATADIR, "prostate/germline_somatic_id_map_outer_join.csv"
+    )
+    germline_somatic_id_map = data_manipulation.load_df_verbose(
+        germline_somatic_id_map_f
+    )
     logger.debug(
         f"Converting list of {len(germlineIDs)} germline IDs (vcf_germline_id) to somatic IDs (Tumor_Sample_Barcode)."
     )
@@ -331,15 +364,23 @@ def convert_germline_id_to_somatic_id(germlineIDs, GERMLINE_DATADIR="../../../pn
     return somaticIDs
 
 
-def convert_somatic_id_to_germline_id(somaticIDs, GERMLINE_DATADIR="../../../pnet_germline/data/"):
+def convert_somatic_id_to_germline_id(
+    somaticIDs, GERMLINE_DATADIR="../../../pnet_germline/data/"
+):
     """
     Convert list of somatic IDs (Tumor_Sample_Barcode) to germline IDs (vcf_germline_id).
     Warn if the converted list has any NAs: this means that a match wasn't found.
     """
     logger.debug("Loading the germline ID and somatic-germline ID mapping DF")
-    germline_somatic_id_map_f = os.path.join(GERMLINE_DATADIR, "prostate/germline_somatic_id_map_outer_join.csv")
-    germline_somatic_id_map = data_manipulation.load_df_verbose(germline_somatic_id_map_f)
-    logger.info("Converting list of somatic IDs (Tumor_Sample_Barcode) to germline IDs (vcf_germline_id).")
+    germline_somatic_id_map_f = os.path.join(
+        GERMLINE_DATADIR, "prostate/germline_somatic_id_map_outer_join.csv"
+    )
+    germline_somatic_id_map = data_manipulation.load_df_verbose(
+        germline_somatic_id_map_f
+    )
+    logger.info(
+        "Converting list of somatic IDs (Tumor_Sample_Barcode) to germline IDs (vcf_germline_id)."
+    )
     germlineIDs = data_manipulation.convert_values(
         input_value=somaticIDs,
         source=germline_somatic_id_map.Tumor_Sample_Barcode.tolist(),
@@ -348,14 +389,22 @@ def convert_somatic_id_to_germline_id(somaticIDs, GERMLINE_DATADIR="../../../pne
     return germlineIDs
 
 
-def zero_impute_somatic_datasets(germline_datasets, somatic_datasets, zero_impute_somatic=False):
+def zero_impute_somatic_datasets(
+    germline_datasets, somatic_datasets, zero_impute_somatic=False
+):
     if zero_impute_somatic is True:
-        logger.info(f"Starting process of zero-imputing the {len(somatic_datasets)} somatic dataset(s)")
-        germline_features = set(data_manipulation.find_overlapping_columns(*germline_datasets))
+        logger.info(
+            f"Starting process of zero-imputing the {len(somatic_datasets)} somatic dataset(s)"
+        )
+        germline_features = set(
+            data_manipulation.find_overlapping_columns(*germline_datasets)
+        )
         imputed_dataframes = []
         for df in somatic_datasets:
             features_only_in_germline = germline_features - set(df.columns)
-            imputed_df = data_manipulation.impute_cols_with_a_constant(df, features_only_in_germline, fill=0)
+            imputed_df = data_manipulation.impute_cols_with_a_constant(
+                df, features_only_in_germline, fill=0
+            )
             imputed_dataframes.append(imputed_df)
         return imputed_dataframes
     return somatic_datasets
@@ -373,12 +422,18 @@ def zero_impute_germline_datasets(
     (not subset down to whatever germline gene subset we're using).
     """
     if zero_impute_germline is True:
-        logger.info(f"Starting process of zero-imputing the {len(germline_datasets)} germline datasets")
-        somatic_features = set(data_manipulation.find_overlapping_columns(*somatic_datasets))
+        logger.info(
+            f"Starting process of zero-imputing the {len(germline_datasets)} germline datasets"
+        )
+        somatic_features = set(
+            data_manipulation.find_overlapping_columns(*somatic_datasets)
+        )
         imputed_dataframes = []
         for df in germline_datasets:
             features_only_in_somatic = somatic_features - set(df.columns)
-            imputed_df = data_manipulation.impute_cols_with_a_constant(df, features_only_in_somatic, fill=0)
+            imputed_df = data_manipulation.impute_cols_with_a_constant(
+                df, features_only_in_somatic, fill=0
+            )
             imputed_dataframes.append(imputed_df)
         return imputed_dataframes
     return germline_datasets

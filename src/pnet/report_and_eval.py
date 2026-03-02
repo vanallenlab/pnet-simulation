@@ -41,9 +41,8 @@ def make_path_if_needed(file_path):
 
 
 def make_dir_if_needed(directory):
-    if not os.path.isdir(directory) and directory != "":
-        logger.debug(f"Directory did not exist; making directory {directory}")
-        os.makedirs(directory)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
     return
 
 
@@ -172,11 +171,15 @@ def get_pnet_preds_and_probs(model, pnet_dataset):
     model.to("cpu")
     x = pnet_dataset.x
     additional = pnet_dataset.additional
-    logger.debug("Running `get_pnet_preds_and_probs`.\nSanitize for logging and downstream use (.detach().cpu())")
+    logger.debug(
+        "Running `get_pnet_preds_and_probs`.\nSanitize for logging and downstream use (.detach().cpu())"
+    )
     pred_probas = model.predict_proba(x, additional).detach().cpu()
     preds = model.predict(x, additional).detach().cpu()
 
-    logger.debug(f"Shape of pred_probas from `model.predict_proba`: {pred_probas.shape}")
+    logger.debug(
+        f"Shape of pred_probas from `model.predict_proba`: {pred_probas.shape}"
+    )
     logger.debug(f"Type of pred_probas from `model.predict_proba`: {type(pred_probas)}")
 
     # Ensure preds is 1D
@@ -232,7 +235,9 @@ def get_performance_metrics(who, y_trues, y_preds, y_probas, save_dir=None):
         f"{who}_average_precision_score": average_precision_score(y_trues, y_probas),
         f"{who}_f1_score": f1_score(y_trues, y_preds),
         f"{who}_confusion_matrix\n": confusion_matrix(y_trues, y_preds).tolist(),
-        f"{who}_classification report\n": classification_report(y_trues, y_preds, output_dict=True),
+        f"{who}_classification report\n": classification_report(
+            y_trues, y_preds, output_dict=True
+        ),
     }
 
     logger.info(f"{who} set metrics:")
@@ -281,8 +286,20 @@ def log_plots_to_wandb(who, y_trues, y_preds, y_probas_2col):
             )
         }
     )
-    wandb.log({f"{who}_precision_recall_plot": wandb.plot.pr_curve(y_true=y_trues, y_probas=y_probas_2col)})
-    wandb.log({f"{who}_roc_auc_plot": wandb.plot.roc_curve(y_true=y_trues, y_probas=y_probas_2col)})
+    wandb.log(
+        {
+            f"{who}_precision_recall_plot": wandb.plot.pr_curve(
+                y_true=y_trues, y_probas=y_probas_2col
+            )
+        }
+    )
+    wandb.log(
+        {
+            f"{who}_roc_auc_plot": wandb.plot.roc_curve(
+                y_true=y_trues, y_probas=y_probas_2col
+            )
+        }
+    )
     return
 
 
@@ -308,7 +325,9 @@ def get_train_test_manual_split(x, y, train_inds, test_inds):
     - y_train: Labels for the training set.
     - y_test: Labels for the testing set.
     """
-    logger.info("CAUTION: this `get_train_test_manual_split` is an untested function. TODO: check functionality.")
+    logger.info(
+        "CAUTION: this `get_train_test_manual_split` is an untested function. TODO: check functionality."
+    )
 
     # Assuming 'x' is a NumPy array or pandas DataFrame
     X_train = x[train_inds]
@@ -321,14 +340,18 @@ def get_train_test_manual_split(x, y, train_inds, test_inds):
     return X_train, X_test, y_train, y_test
 
 
-def get_model_preds_and_probs(model, who, model_type="pnet", pnet_dataset=None, x=None, verbose=False):
+def get_model_preds_and_probs(
+    model, who, model_type="pnet", pnet_dataset=None, x=None, verbose=False
+):
     logger.info(f"Model_type = {model_type}. Computing model predictions on {who} set")
     if model_type == "pnet":
         y_preds, y_probas = get_pnet_preds_and_probs(model, pnet_dataset)
-    elif model_type in ["rf", "bdt"]:
+    elif model_type in ["rf", "bdt", "logistic_regression", "sgd_logistic_regression"]:
         y_preds, y_probas = get_sklearn_model_preds_and_probs(model, x)
     else:
-        logger.error(f"We haven't implemented for the model type you specified, which was {model_type}")
+        logger.error(
+            f"We haven't implemented for the model type you specified, which was {model_type}"
+        )
     if verbose:
         logger.info(f"Hist of model prediction probabilities on {who} set")
         plt.hist(y_probas)
@@ -349,21 +372,79 @@ def get_sklearn_model_preds_and_probs(sklearn_model, x):
 
 
 def get_sklearn_feature_importances(sklearn_model, who, input_df, save_dir=None):
-    importances = sklearn_model.feature_importances_
-    gene_feature_importances = pd.Series(
-        importances, index=input_df.columns
-    )  # TODO: check if this is the correct index
-    # TODO: edit so that it's a better format when saved down
-    logger.debug(
-        "Editing DF format so that we just have two columns to save down. This makes the read-in format much nicer."
+    """
+    Returns a DF with:
+      - feature
+      - importance score  (magnitude, for ranking)
+      - coef              (signed effect; NaN for tree models)
+
+    Tree models:
+      - importance score = feature_importances_
+      - coef = NaN
+
+    Linear models (e.g., LogisticRegression):
+      - coef = signed coefficient
+      - importance score = abs(coef)
+      - multiclass aggregated via mean across classes
+    """
+    logger.info(f"Getting {who} set feature importances from sklearn model")
+    feature_names = list(input_df.columns)
+
+    importance = None
+    coef_signed = None
+
+    # --- Tree-based models ---
+    if hasattr(sklearn_model, "feature_importances_"):
+        importance = np.asarray(sklearn_model.feature_importances_)
+        coef_signed = np.full_like(importance, np.nan, dtype=float)
+
+    # --- Linear models ---
+    elif hasattr(sklearn_model, "coef_"):
+        coef = np.asarray(sklearn_model.coef_)
+
+        # coef shape handling (for multiclass vs binary)
+        if coef.ndim == 1:
+            coef_signed = coef
+        else:
+            # (1, n_features) or (n_classes, n_features)
+            coef_signed = coef.mean(axis=0)
+
+        importance = np.abs(coef_signed)
+
+    else:
+        raise AttributeError(
+            f"{type(sklearn_model).__name__} has neither feature_importances_ nor coef_."
+        )
+
+    importance = np.ravel(importance)
+    coef_signed = np.ravel(coef_signed)
+
+    if len(importance) != len(feature_names):
+        raise ValueError(
+            f"Importance length ({len(importance)}) != #features ({len(feature_names)})"
+        )
+
+    gene_feature_importances = pd.DataFrame(
+        {
+            "feature": feature_names,
+            "importance score": importance,
+            "coef": coef_signed,
+        }
     )
-    gene_feature_importances = gene_feature_importances.reset_index()
-    gene_feature_importances.columns = ["feature", "importance score"]
+
+    logger.debug("Sort by magnitude for readability")
+    gene_feature_importances = gene_feature_importances.sort_values(
+        "importance score", ascending=False
+    ).reset_index(drop=True)
+
     if save_dir is not None:
         make_dir_if_needed(save_dir)
         logger.info(f"Saving feature importance information to {save_dir}")
-        gene_feature_importances.to_csv(os.path.join(save_dir, f"{who}_gene_feature_importances.csv"), index=False)
-        # wandb.save(f'{who}_gene_feature_importances.csv', base_path=save_dir, policy="end") # TODO: problem. save_dir is above current dir, and this isn't allowed.
+        gene_feature_importances.to_csv(
+            os.path.join(save_dir, f"{who}_gene_feature_importances.csv"),
+            index=False,
+        )
+
     return gene_feature_importances
 
 
@@ -375,20 +456,32 @@ def get_pnet_feature_importances(model, who, pnet_dataset, save_dir=None):
     - pnet_dataset: this is a Pnet dataset object (not a DF), and has attributes x, additional, y, etc.
     """
     logger.info(f"Getting feature importances for {who} set")
-    gene_feature_importances, additional_feature_importances, gene_importances, layer_importance_scores = (
-        model.interpret(pnet_dataset)
-    )
+    (
+        gene_feature_importances,
+        additional_feature_importances,
+        gene_importances,
+        layer_importance_scores,
+    ) = model.interpret(pnet_dataset)
 
     if save_dir is not None:
         make_dir_if_needed(save_dir)
         logger.info(f"Saving feature importance information to {save_dir}")
-        gene_feature_importances.to_csv(os.path.join(save_dir, f"{who}_gene_feature_importances.csv"))
-        additional_feature_importances.to_csv(os.path.join(save_dir, f"{who}_additional_feature_importances.csv"))
+        gene_feature_importances.to_csv(
+            os.path.join(save_dir, f"{who}_gene_feature_importances.csv")
+        )
+        additional_feature_importances.to_csv(
+            os.path.join(save_dir, f"{who}_additional_feature_importances.csv")
+        )
         gene_importances.to_csv(os.path.join(save_dir, f"{who}_gene_importances.csv"))
         for i, layer in enumerate(layer_importance_scores):
             layer.to_csv(os.path.join(save_dir, f"{who}_layer_{i}_importances.csv"))
 
-    return gene_feature_importances, additional_feature_importances, gene_importances, layer_importance_scores
+    return (
+        gene_feature_importances,
+        additional_feature_importances,
+        gene_importances,
+        layer_importance_scores,
+    )
 
 
 def save_predictions_and_probs(save_dir, who, y_true, y_preds, y_probas, indices=None):
@@ -409,7 +502,9 @@ def save_predictions_and_probs(save_dir, who, y_true, y_preds, y_probas, indices
     y_probas = np.asarray(y_probas)
 
     # Extract probability of class 1 (we're assuming binary classification)
-    y_probas = y_probas[:, 1] if y_probas.ndim > 1 and y_probas.shape[1] == 2 else y_probas
+    y_probas = (
+        y_probas[:, 1] if y_probas.ndim > 1 and y_probas.shape[1] == 2 else y_probas
+    )
     results_dict = {
         "true": y_true.squeeze(),
         "predicted": y_preds.squeeze(),
@@ -426,7 +521,16 @@ def save_predictions_and_probs(save_dir, who, y_true, y_preds, y_probas, indices
     return results_df
 
 
-def evaluate_interpret_save(model, who, model_type, pnet_dataset=None, x=None, y=None, save_dir=None):
+def evaluate_interpret_save(
+    model,
+    who,
+    model_type,
+    pnet_dataset=None,
+    x=None,
+    y=None,
+    save_dir=None,
+    log_to_wandb=True,
+):
     """
     For a given trained model of type `model_type' (e.g. P-NET, RF, BDT), get the model predictions, performance metrics, feature importances, and (optionally) save the results.
     The model is evaluated on the `dataset`.
@@ -452,21 +556,31 @@ def evaluate_interpret_save(model, who, model_type, pnet_dataset=None, x=None, y
         logger.debug(f"Type of y (should be numpy): {type(y)}")
 
         save_predictions_and_probs(
-            save_dir, who, y, y_preds, y_probas, indices=pnet_dataset.input_df.index.tolist()
+            save_dir,
+            who,
+            y,
+            y_preds,
+            y_probas,
+            indices=pnet_dataset.input_df.index.tolist(),
         )  # TODO: this is universal, and should get pulled out
 
         metric_dict = get_performance_metrics(
             who, y, y_preds, y_probas, save_dir
         )  # TODO: this is universal, and should get pulled out
-        log_metrics_to_wandb(metric_dict)
+        if log_to_wandb:
+            log_metrics_to_wandb(metric_dict)
 
         if who != "train":
-            gene_feature_importances, additional_feature_importances, gene_importances, layer_importance_scores = (
-                get_pnet_feature_importances(model, who, pnet_dataset, save_dir)
-            )
+            (
+                gene_feature_importances,
+                additional_feature_importances,
+                gene_importances,
+                layer_importance_scores,
+            ) = get_pnet_feature_importances(model, who, pnet_dataset, save_dir)
 
             proba_2col = np.stack([1 - y_probas, y_probas], axis=1)
-            log_plots_to_wandb(who, y, y_preds, proba_2col)
+            if log_to_wandb:
+                log_plots_to_wandb(who, y, y_preds, proba_2col)
         elif who == "train":
             logger.warn(
                 "Skipping feature importances for the training set. Causing runs to crash due to OOM errors, and don't think I need these anyway."
@@ -481,7 +595,7 @@ def evaluate_interpret_save(model, who, model_type, pnet_dataset=None, x=None, y
             layer_importance_scores,
         )
 
-    elif model_type in ["rf", "bdt"]:
+    elif model_type in ["rf", "bdt", "logistic_regression", "sgd_logistic_regression"]:
         logger.info(
             f"Getting the {model_type} model predictions on the {who} set, performance metrics, and feature importances (if applicable)"
         )
@@ -489,25 +603,36 @@ def evaluate_interpret_save(model, who, model_type, pnet_dataset=None, x=None, y
         y = pnet_dataset.y.ravel().numpy()
         input_df = pnet_dataset.input_df
 
-        y_preds, y_probas = get_model_preds_and_probs(model=model, x=x, who=who, model_type=model_type)
+        y_preds, y_probas = get_model_preds_and_probs(
+            model=model, x=x, who=who, model_type=model_type
+        )
 
-        save_predictions_and_probs(save_dir, who, y, y_preds, y_probas[:, 1], indices=input_df.index.tolist())
+        save_predictions_and_probs(
+            save_dir, who, y, y_preds, y_probas[:, 1], indices=input_df.index.tolist()
+        )
         metric_dict = get_performance_metrics(who, y, y_preds, y_probas[:, 1], save_dir)
-        log_metrics_to_wandb(metric_dict)
-        gene_feature_importances = get_sklearn_feature_importances(model, who=who, input_df=input_df, save_dir=save_dir)
-        if who != "train":
+        if log_to_wandb:
+            log_metrics_to_wandb(metric_dict)
+        gene_feature_importances = get_sklearn_feature_importances(
+            model, who=who, input_df=input_df, save_dir=save_dir
+        )
+        if log_to_wandb and who != "train":
             log_plots_to_wandb(who, y, y_preds, y_probas)
         return gene_feature_importances
 
     else:
-        logger.error(f"We haven't implemented for the model type you specified, which was {model_type}")
+        logger.error(
+            f"We haven't implemented for the model type you specified, which was {model_type}"
+        )
     return
 
 
 def save_as_file_to_wandb(data, filename, policy="now", delete_local=True):
     logger.info(f"Temporarily save down to {filename}, upload to WandB.")
     if not isinstance(data, pd.DataFrame):
-        logger.warn(f"Expected a DF as input; converting {type(data)} object to pandas DF before saving.")
+        logger.warn(
+            f"Expected a DF as input; converting {type(data)} object to pandas DF before saving."
+        )
         data = pd.DataFrame(data)
     data.to_csv(filename)
     wandb.save(filename, policy=policy)

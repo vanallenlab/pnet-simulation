@@ -1,0 +1,49 @@
+
+# Sweep for hyperparameter tuning on somatic data
+project: "prostate_met_status"
+
+program: /mnt/disks/gmiller_data1/pnet-simu-private/src/pipelines/run_model_on_preharmonized_data.py
+method: grid
+parameters:
+  datasets:
+    values:
+      # - "somatic_amp somatic_del somatic_mut" # all somatic variant types
+      - "somatic_amp somatic_del somatic_mut germline_rare_common_lof_missense" # combined somatic and germline
+  data_config_f:
+    value: "/mnt/disks/gmiller_data1/pnet-simu-private/configs/data.yaml"
+  evaluation_set:
+    values: ["validation"]
+  model_type:
+    values: ["pnet"]
+  wandb_group:
+    value: "pnet_hparam_tune_somatic"
+  wandb_project: 
+    value: "prostate_met_status"
+  seed:
+    values: [123]
+  input_data_wandb_id:
+    value: "u5yt90p1"
+  input_data_dir:
+    value: /mnt/disks/gmiller_data1/pnet_germline/processed/wandb-group-data_prep_germline_tier12_and_somatic/converted-IDs-to-somatic_imputed-germline_True_imputed-somatic_False_paired-samples-True/wandb-run-id-u5yt90p1
+  cpus:
+    value: 8
+  # Learning rate for optimizer
+  lr:
+    values: [1e-4, 1e-3, 3e-3]
+  # Weight decay for optimizer
+  weight_decay:
+    values: [1e-5, 1e-4, 1e-3]
+  # Dropout
+  dropout:
+    values: [0.1, 0.2, 0.3]
+  # Input dropout (dropout between input and gene layer)
+  input_dropout:
+    values: [0.3, 0.5, 0.7]
+  # Early stopping patience
+  early_stopping_patience:
+    values: [25, 50]
+  # Class weighting strategy
+  class_weight:
+    values: ["none", "balanced"]
+  epochs:
+    values: [400] #[3] # for testing
